@@ -18,12 +18,20 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
-public:	
+public:
 	virtual void Tick(float DeltaTime) override;
 
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 protected:
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hands")
+	float RightHandDepth = 50.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hands")
+	float DepthScrollSpeed = 5.0f;
+
+	void ScrollDepth(float AxisValue);
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MedSim|Camera")
 	UCameraComponent* CameraComponent;
