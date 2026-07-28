@@ -23,7 +23,7 @@ public:
 
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
-private:
+protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MedSim|Camera")
 	UCameraComponent* CameraComponent;
