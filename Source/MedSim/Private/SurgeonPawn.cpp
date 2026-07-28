@@ -1,6 +1,7 @@
 #include "SurgeonPawn.h"
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "PhysicsEngine/PhysicsHandleComponent.h"
 
 ASurgeonPawn::ASurgeonPawn()
 {
@@ -22,6 +23,7 @@ ASurgeonPawn::ASurgeonPawn()
 	LeftHandMesh->SetRelativeLocation(FVector(60.0f, -30.0f, -20.0f));
 	LeftHandMesh->SetCollisionProfileName(TEXT("NoCollision"));
 
+	PhysicsHandle = CreateDefaultSubobject<UPhysicsHandleComponent>(TEXT("PhysicsHandle"));
 }
 
 void ASurgeonPawn::BeginPlay()
@@ -50,6 +52,11 @@ void ASurgeonPawn::Tick(float DeltaTime)
 			RightHandMesh->SetWorldLocation(FMath::VInterpTo(CurrentLocation, NewHandLocation, DeltaTime, 15.0f));
 		}
 	}
+
+	if (PhysicsHandle && PhysicsHandle->GetGrabbedComponent())
+	{
+		PhysicsHandle->SetTargetLocation(RightHandMesh->GetComponentLocation());
+	}
 }
 
 void ASurgeonPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -57,6 +64,44 @@ void ASurgeonPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
 	PlayerInputComponent->BindAxis("ScrollDepth", this, &ASurgeonPawn::ScrollDepth);
+
+	PlayerInputComponent->BindAction("Grab", IE_Pressed, this, &ASurgeonPawn::GrabObject);
+	PlayerInputComponent->BindAction("Grab", IE_Released, this, &ASurgeonPawn::ReleaseObject);
+}
+
+void ASurgeonPawn::GrabObject()
+{
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		FVector CamLoc, CamDir;
+		if (PC->DeprojectMousePositionToWorld(CamLoc, CamDir))
+		{
+			FVector Start = RightHandMesh->GetComponentLocation();
+			FVector End = Start + (CamDir * 40.0f);
+
+			FHitResult HitResult;
+			FCollisionQueryParams Params;
+			Params.AddIgnoredActor(this);
+
+			if (GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, Params))
+			{
+				UPrimitiveComponent* HitComp = HitResult.GetComponent();
+
+				if (HitComp && HitComp->IsSimulatingPhysics())
+				{
+					PhysicsHandle->GrabComponentAtLocation(HitComp, NAME_None, HitResult.ImpactPoint);
+				}
+			}
+		}
+	}
+}
+
+void ASurgeonPawn::ReleaseObject()
+{
+	if (PhysicsHandle && PhysicsHandle->GetGrabbedComponent())
+	{
+		PhysicsHandle->ReleaseComponent();
+	}
 }
 
 void ASurgeonPawn::ScrollDepth(float AxisValue)

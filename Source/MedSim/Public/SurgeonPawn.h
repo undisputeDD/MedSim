@@ -6,6 +6,7 @@
 
 class UCameraComponent;
 class UStaticMeshComponent;
+class UPhysicsHandleComponent;
 
 UCLASS()
 class MEDSIM_API ASurgeonPawn : public APawn
@@ -24,6 +25,12 @@ public:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 protected:
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MedSim|Physics")
+	UPhysicsHandleComponent* PhysicsHandle;
+
+	void GrabObject();
+	void ReleaseObject();
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MedSim|Hands")
 	float RightHandDepth = 50.0f;
