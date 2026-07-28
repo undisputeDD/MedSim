@@ -1,0 +1,88 @@
+####################################
+# Unreal Engine 5.x (Public Repo)
+####################################
+
+# ===== Build / Generated =====
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# ===== IDE / Editors =====
+.vs/
+.vscode/
+.idea/
+*.sln
+*.xcodeproj
+*.xcworkspace
+*.opensdf
+*.sdf
+
+# ===== Logs / Temp =====
+*.log
+*.tmp
+*.bak
+*.old
+*.autosave
+
+# ===== OS junk =====
+.DS_Store
+Thumbs.db
+
+####################################
+# Content rules (VERY IMPORTANT)
+####################################
+
+# --- Запрещаем всё содержимое Content ---
+Content/*
+
+####################################
+# Explicitly block Fab / Megascans
+####################################
+
+Content/Fab/
+Content/Megascans/
+Content/Quixel/
+
+####################################
+# Asset file types
+####################################
+
+# Assets
+*.uasset
+*.umap
+
+####################################
+# Plugins
+####################################
+
+# Generated plugin files
+Plugins/**/Binaries/
+Plugins/**/Intermediate/
+
+# Fab plugins
+Plugins/Fab/
+Plugins/Megascans/
+
+####################################
+# Packaging / Builds
+####################################
+
+# Builds
+Build/
+StagedBuilds/
+
+####################################
+# Optional safety net
+####################################
+
+# Exported resources
+*.fbx
+*.obj
+*.png
+*.jpg
+*.tga
+*.wav
+*.mp3
+*.mp4
+*.vsconfig
