@@ -26,20 +26,60 @@ public:
 
 protected:
 
+	// -> Initial settings
+	void ReturnHand();
+
+	UPROPERTY()
+	FRotator InitialRightHandRotation;
+
+	UPROPERTY()
+	float InitialRightHandDepth{ 50.0f };
+
+	UPROPERTY()
+	float InitialMouseX{};
+
+	UPROPERTY()
+	float InitialMouseY{};
+
+	UPROPERTY()
+	float SavedMouseX{};
+
+	UPROPERTY()
+	float SavedMouseY{};
+	// Initial settings <-
+
+	// -> Hand rotation
+	FVector TargetHandLocation{};
+
+	UPROPERTY()
+	bool bIsRotatingHand{};
+
+	void StartHandRotation();
+	void StopHandRotation();
+
+	void RotateHandTwist(float AxisValue);
+	void RotateHandTilt(float AxisValue);
+	// Hand rotation <-
+
+	// -> Physics
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MedSim|Physics")
 	UPhysicsHandleComponent* PhysicsHandle;
 
 	void GrabObject();
 	void ReleaseObject();
+	// Physics <-
+
+	// -> 3D movement modelling
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MedSim|Hands")
+	float RightHandDepth{ InitialRightHandDepth };
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MedSim|Hands")
-	float RightHandDepth = 50.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MedSim|Hands")
-	float DepthScrollSpeed = 3.0f;
+	float DepthScrollSpeed{ 3.0f };
 
 	void ScrollDepth(float AxisValue);
+	// 3D movement modelling <-
 
+	// -> Components
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MedSim|Camera")
 	UCameraComponent* CameraComponent;
 
@@ -48,4 +88,5 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MedSim|Hands")
 	UStaticMeshComponent* LeftHandMesh;
+	// Components <-
 };

@@ -36,6 +36,21 @@ void ASurgeonPawn::BeginPlay()
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
 		PC->bShowMouseCursor = true;
+
+		FVector LeftHandTipLocation = LeftHandMesh->GetComponentLocation() - (LeftHandMesh->GetUpVector() * HAND_OFFSET);
+
+		LeftHandTipLocation.Y += 60.f;
+
+		FVector2D ScreenPosition;
+		if (PC->ProjectWorldLocationToScreen(LeftHandTipLocation, ScreenPosition))
+		{
+			InitialMouseX = abs(ScreenPosition.X);
+			InitialMouseY = abs(ScreenPosition.Y);
+		}
+
+		RightHandDepth = InitialRightHandDepth;
+
+		InitialRightHandRotation = RightHandMesh->GetRelativeRotation();
 	}
 }
 
@@ -49,13 +64,14 @@ void ASurgeonPawn::Tick(float DeltaTime)
 
 		if (PC->DeprojectMousePositionToWorld(WorldLocation, WorldDirection))
 		{
-			FVector CursorPoint = WorldLocation + (WorldDirection * RightHandDepth);
-
-			FVector NewHandLocation = CursorPoint + (RightHandMesh->GetUpVector() * HAND_OFFSET);
+			if (!bIsRotatingHand)
+			{
+				FVector CursorPoint = WorldLocation + (WorldDirection * RightHandDepth);
+				TargetHandLocation = CursorPoint + (RightHandMesh->GetUpVector() * HAND_OFFSET);
+			}
 
 			FVector CurrentLocation = RightHandMesh->GetComponentLocation();
-
-			RightHandMesh->SetWorldLocation(FMath::VInterpTo(CurrentLocation, NewHandLocation, DeltaTime, 15.0f));
+			RightHandMesh->SetWorldLocation(FMath::VInterpTo(CurrentLocation, TargetHandLocation, DeltaTime, 15.0f));
 		}
 	}
 
@@ -74,6 +90,26 @@ void ASurgeonPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 
 	PlayerInputComponent->BindAction("Grab", IE_Pressed, this, &ASurgeonPawn::GrabObject);
 	PlayerInputComponent->BindAction("Grab", IE_Released, this, &ASurgeonPawn::ReleaseObject);
+
+	PlayerInputComponent->BindAction("RotateAction", IE_Pressed, this, &ASurgeonPawn::StartHandRotation);
+	PlayerInputComponent->BindAction("RotateAction", IE_Released, this, &ASurgeonPawn::StopHandRotation);
+
+	PlayerInputComponent->BindAxis("TurnHand", this, &ASurgeonPawn::RotateHandTwist);
+	PlayerInputComponent->BindAxis("TiltHand", this, &ASurgeonPawn::RotateHandTilt);
+
+	PlayerInputComponent->BindAction("ReturnHand", IE_Pressed, this, &ASurgeonPawn::ReturnHand);
+}
+
+void ASurgeonPawn::ReturnHand()
+{
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		PC->SetMouseLocation(FMath::RoundToInt(InitialMouseX), FMath::RoundToInt(InitialMouseY));
+
+		RightHandDepth = InitialRightHandDepth;
+
+		RightHandMesh->SetRelativeRotation(InitialRightHandRotation);
+	}
 }
 
 void ASurgeonPawn::GrabObject()
@@ -117,5 +153,41 @@ void ASurgeonPawn::ScrollDepth(float AxisValue)
 	{
 		RightHandDepth += AxisValue * DepthScrollSpeed;
 		RightHandDepth = FMath::Clamp(RightHandDepth, 20.0f, 300.0f);
+	}
+}
+
+void ASurgeonPawn::StartHandRotation()
+{
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		PC->GetMousePosition(SavedMouseX, SavedMouseY);
+	}
+
+	bIsRotatingHand = true;
+}
+
+void ASurgeonPawn::StopHandRotation()
+{
+	bIsRotatingHand = false;
+
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		PC->SetMouseLocation(FMath::RoundToInt(SavedMouseX), FMath::RoundToInt(SavedMouseY));
+	}
+}
+
+void ASurgeonPawn::RotateHandTwist(float AxisValue)
+{
+	if (bIsRotatingHand && AxisValue != 0.0f)
+	{
+		RightHandMesh->AddLocalRotation(FRotator(0.0f, AxisValue * 3.0f, 0.0f));
+	}
+}
+
+void ASurgeonPawn::RotateHandTilt(float AxisValue)
+{
+	if (bIsRotatingHand && AxisValue != 0.0f)
+	{
+		RightHandMesh->AddLocalRotation(FRotator(AxisValue * 3.0f, 0.0f, 0.0f));
 	}
 }
