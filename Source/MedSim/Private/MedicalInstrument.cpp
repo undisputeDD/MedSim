@@ -5,8 +5,11 @@ AMedicalInstrument::AMedicalInstrument()
 {
  	PrimaryActorTick.bCanEverTick = false;
 
+	USceneComponent* SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
+	RootComponent = SceneRoot;
+
 	InstrumentMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("InstrumentMesh"));
-	RootComponent = InstrumentMesh;
+	InstrumentMesh->SetupAttachment(RootComponent);
 
 	InstrumentMesh->SetSimulatePhysics(true);
 	InstrumentMesh->SetCollisionProfileName(TEXT("PhysicsActor"));
