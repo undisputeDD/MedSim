@@ -62,7 +62,7 @@ void ASurgeonPawn::Tick(float DeltaTime)
 	if (PhysicsHandle && PhysicsHandle->GetGrabbedComponent())
 	{
 		FVector HandTipLocation = RightHandMesh->GetComponentLocation() - (RightHandMesh->GetUpVector() * HAND_OFFSET);
-		PhysicsHandle->SetTargetLocation(HandTipLocation);
+		PhysicsHandle->SetTargetLocationAndRotation(HandTipLocation, RightHandMesh->GetComponentRotation());
 	}
 }
 
@@ -96,7 +96,7 @@ void ASurgeonPawn::GrabObject()
 
 				if (HitComp && HitComp->IsSimulatingPhysics())
 				{
-					PhysicsHandle->GrabComponentAtLocationWithRotation(HitComp, NAME_None, Start, HitComp->GetComponentRotation());
+					PhysicsHandle->GrabComponentAtLocationWithRotation(HitComp, NAME_None, HitResult.ImpactPoint, HitComp->GetComponentRotation());
 				}
 			}
 		}
