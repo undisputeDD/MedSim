@@ -3,6 +3,9 @@
 #include "Components/StaticMeshComponent.h"
 #include "PhysicsEngine/PhysicsHandleComponent.h"
 
+const float HAND_OFFSET = 30.f;
+const float GRAB_DEPTH = 10.f;
+
 ASurgeonPawn::ASurgeonPawn()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -46,16 +49,20 @@ void ASurgeonPawn::Tick(float DeltaTime)
 
 		if (PC->DeprojectMousePositionToWorld(WorldLocation, WorldDirection))
 		{
-			FVector NewHandLocation = WorldLocation + (WorldDirection * RightHandDepth);
+			FVector CursorPoint = WorldLocation + (WorldDirection * RightHandDepth);
+
+			FVector NewHandLocation = CursorPoint + (RightHandMesh->GetUpVector() * HAND_OFFSET);
 
 			FVector CurrentLocation = RightHandMesh->GetComponentLocation();
+
 			RightHandMesh->SetWorldLocation(FMath::VInterpTo(CurrentLocation, NewHandLocation, DeltaTime, 15.0f));
 		}
 	}
 
 	if (PhysicsHandle && PhysicsHandle->GetGrabbedComponent())
 	{
-		PhysicsHandle->SetTargetLocation(RightHandMesh->GetComponentLocation());
+		FVector HandTipLocation = RightHandMesh->GetComponentLocation() - (RightHandMesh->GetUpVector() * HAND_OFFSET);
+		PhysicsHandle->SetTargetLocation(HandTipLocation);
 	}
 }
 
@@ -73,11 +80,11 @@ void ASurgeonPawn::GrabObject()
 {
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
-		FVector CamLoc, CamDir;
-		if (PC->DeprojectMousePositionToWorld(CamLoc, CamDir))
+		FVector WorldLocation, WorldDirection;
+		if (PC->DeprojectMousePositionToWorld(WorldLocation, WorldDirection))
 		{
-			FVector Start = RightHandMesh->GetComponentLocation();
-			FVector End = Start + (CamDir * 40.0f);
+			FVector Start = RightHandMesh->GetComponentLocation() - (RightHandMesh->GetUpVector() * HAND_OFFSET);
+			FVector End = Start + (WorldDirection * GRAB_DEPTH);
 
 			FHitResult HitResult;
 			FCollisionQueryParams Params;
@@ -89,7 +96,7 @@ void ASurgeonPawn::GrabObject()
 
 				if (HitComp && HitComp->IsSimulatingPhysics())
 				{
-					PhysicsHandle->GrabComponentAtLocation(HitComp, NAME_None, HitResult.ImpactPoint);
+					PhysicsHandle->GrabComponentAtLocationWithRotation(HitComp, NAME_None, Start, HitComp->GetComponentRotation());
 				}
 			}
 		}

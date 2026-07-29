@@ -36,7 +36,7 @@ protected:
 	float RightHandDepth = 50.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MedSim|Hands")
-	float DepthScrollSpeed = 5.0f;
+	float DepthScrollSpeed = 3.0f;
 
 	void ScrollDepth(float AxisValue);
 
