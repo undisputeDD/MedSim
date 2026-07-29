@@ -59,6 +59,7 @@ protected:
 
 	void RotateHandTwist(float AxisValue);
 	void RotateHandTilt(float AxisValue);
+	void RotateHandRoll(float AxisValue);
 	// Hand rotation <-
 
 	// -> Physics

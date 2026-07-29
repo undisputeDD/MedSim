@@ -96,6 +96,7 @@ void ASurgeonPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 
 	PlayerInputComponent->BindAxis("TurnHand", this, &ASurgeonPawn::RotateHandTwist);
 	PlayerInputComponent->BindAxis("TiltHand", this, &ASurgeonPawn::RotateHandTilt);
+	PlayerInputComponent->BindAxis("RollHand", this, &ASurgeonPawn::RotateHandRoll);
 
 	PlayerInputComponent->BindAction("ReturnHand", IE_Pressed, this, &ASurgeonPawn::ReturnHand);
 }
@@ -189,5 +190,13 @@ void ASurgeonPawn::RotateHandTilt(float AxisValue)
 	if (bIsRotatingHand && AxisValue != 0.0f)
 	{
 		RightHandMesh->AddLocalRotation(FRotator(AxisValue * 3.0f, 0.0f, 0.0f));
+	}
+}
+
+void ASurgeonPawn::RotateHandRoll(float AxisValue)
+{
+	if (bIsRotatingHand && AxisValue != 0.0f)
+	{
+		RightHandMesh->AddLocalRotation(FRotator(0.0f, 0.0f, AxisValue * 3.0f));
 	}
 }
