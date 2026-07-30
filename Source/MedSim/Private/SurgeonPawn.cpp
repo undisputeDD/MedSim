@@ -132,8 +132,6 @@ void ASurgeonPawn::ReturnHand()
 
 void ASurgeonPawn::GrabObject()
 {
-	// DrawDebugSphere(GetWorld(), GrabPoint->GetComponentLocation(), 5.f, 16, FColor::Green, true, 5.f);
-
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
 		FVector WorldLocation, WorldDirection;
@@ -248,7 +246,6 @@ void ASurgeonPawn::RotateInstrumentPitch(float AxisValue)
 	{
 		FRotator DeltaRot(AxisValue * 3.0f, 0.0f, 0.0f);
 		GrabPoint->AddWorldRotation(DeltaRot);
-		// GrabPoint->AddLocalRotation(FQuat(FRotator(AxisValue * 3.0f, 0.0f, 0.0f)));
 	}
 }
 
@@ -258,7 +255,6 @@ void ASurgeonPawn::RotateInstrumentYaw(float AxisValue)
 	{
 		FRotator DeltaRot(0.0f, AxisValue * 3.0f, 0.0f);
 		GrabPoint->AddWorldRotation(DeltaRot);
-		// GrabPoint->AddLocalRotation(FQuat(FRotator(0.0f, AxisValue * 3.0f, 0.0f)));
 	}
 }
 
@@ -268,6 +264,5 @@ void ASurgeonPawn::RotateInstrumentRoll(float AxisValue)
 	{
 		FRotator DeltaRot(0.0f, 0.0f, AxisValue * 3.0f);
 		GrabPoint->AddWorldRotation(DeltaRot);
-		// GrabPoint->AddLocalRotation(FQuat(FRotator(0.0f, 0.0f, AxisValue * 3.0f)));
 	}
 }
