@@ -27,6 +27,14 @@ ASurgeonPawn::ASurgeonPawn()
 	LeftHandMesh->SetCollisionProfileName(TEXT("NoCollision"));
 
 	PhysicsHandle = CreateDefaultSubobject<UPhysicsHandleComponent>(TEXT("PhysicsHandle"));
+
+	PhysicsHandle->SetLinearStiffness(1500.0f);
+	PhysicsHandle->SetLinearDamping(50.0f);
+	PhysicsHandle->SetAngularStiffness(100.0f);
+	PhysicsHandle->SetAngularDamping(10.0f);
+
+	GrabPoint = CreateDefaultSubobject<USceneComponent>(TEXT("GrabPoint"));
+	GrabPoint->SetupAttachment(RootComponent);
 }
 
 void ASurgeonPawn::BeginPlay()
@@ -64,7 +72,7 @@ void ASurgeonPawn::Tick(float DeltaTime)
 
 		if (PC->DeprojectMousePositionToWorld(WorldLocation, WorldDirection))
 		{
-			if (!bIsRotatingHand)
+			if (!bIsRotatingHand && !bIsRotatingInstrument)
 			{
 				FVector CursorPoint = WorldLocation + (WorldDirection * RightHandDepth);
 				TargetHandLocation = CursorPoint + (RightHandMesh->GetUpVector() * HAND_OFFSET);
@@ -78,7 +86,9 @@ void ASurgeonPawn::Tick(float DeltaTime)
 	if (PhysicsHandle && PhysicsHandle->GetGrabbedComponent())
 	{
 		FVector HandTipLocation = RightHandMesh->GetComponentLocation() - (RightHandMesh->GetUpVector() * HAND_OFFSET);
-		PhysicsHandle->SetTargetLocationAndRotation(HandTipLocation, RightHandMesh->GetComponentRotation());
+		GrabPoint->SetWorldLocation(HandTipLocation);
+
+		PhysicsHandle->SetTargetLocationAndRotation(GrabPoint->GetComponentLocation(), GrabPoint->GetComponentRotation());
 	}
 }
 
@@ -91,12 +101,19 @@ void ASurgeonPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	PlayerInputComponent->BindAction("Grab", IE_Pressed, this, &ASurgeonPawn::GrabObject);
 	PlayerInputComponent->BindAction("Grab", IE_Released, this, &ASurgeonPawn::ReleaseObject);
 
-	PlayerInputComponent->BindAction("RotateAction", IE_Pressed, this, &ASurgeonPawn::StartHandRotation);
-	PlayerInputComponent->BindAction("RotateAction", IE_Released, this, &ASurgeonPawn::StopHandRotation);
+	PlayerInputComponent->BindAction("HandRotateAction", IE_Pressed, this, &ASurgeonPawn::StartHandRotation);
+	PlayerInputComponent->BindAction("HandRotateAction", IE_Released, this, &ASurgeonPawn::StopHandRotation);
 
 	PlayerInputComponent->BindAxis("TurnHand", this, &ASurgeonPawn::RotateHandTwist);
 	PlayerInputComponent->BindAxis("TiltHand", this, &ASurgeonPawn::RotateHandTilt);
 	PlayerInputComponent->BindAxis("RollHand", this, &ASurgeonPawn::RotateHandRoll);
+
+	PlayerInputComponent->BindAction("InstrumentRotateAction", IE_Pressed, this, &ASurgeonPawn::StartInstrumentRotation);
+	PlayerInputComponent->BindAction("InstrumentRotateAction", IE_Released, this, &ASurgeonPawn::StopInstrumentRotation);
+
+	PlayerInputComponent->BindAxis("PitchInstrument", this, &ASurgeonPawn::RotateInstrumentPitch);
+	PlayerInputComponent->BindAxis("YawInstrument", this, &ASurgeonPawn::RotateInstrumentYaw);
+	PlayerInputComponent->BindAxis("RollInstrument", this, &ASurgeonPawn::RotateInstrumentRoll);
 
 	PlayerInputComponent->BindAction("ReturnHand", IE_Pressed, this, &ASurgeonPawn::ReturnHand);
 }
@@ -115,6 +132,8 @@ void ASurgeonPawn::ReturnHand()
 
 void ASurgeonPawn::GrabObject()
 {
+	// DrawDebugSphere(GetWorld(), GrabPoint->GetComponentLocation(), 5.f, 16, FColor::Green, true, 5.f);
+
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
 		FVector WorldLocation, WorldDirection;
@@ -133,7 +152,11 @@ void ASurgeonPawn::GrabObject()
 
 				if (HitComp && HitComp->IsSimulatingPhysics())
 				{
-					PhysicsHandle->GrabComponentAtLocationWithRotation(HitComp, NAME_None, HitResult.ImpactPoint, HitComp->GetComponentRotation());
+					GrabPoint->SetWorldLocation(HitResult.ImpactPoint);
+
+					GrabPoint->SetRelativeRotation(FRotator::ZeroRotator);
+
+					PhysicsHandle->GrabComponentAtLocationWithRotation(HitComp, NAME_None, HitResult.ImpactPoint, GrabPoint->GetComponentRotation());
 				}
 			}
 		}
@@ -150,7 +173,7 @@ void ASurgeonPawn::ReleaseObject()
 
 void ASurgeonPawn::ScrollDepth(float AxisValue)
 {
-	if (AxisValue != 0.0f)
+	if (AxisValue != 0.0f && !bIsRotatingHand && !bIsRotatingInstrument)
 	{
 		RightHandDepth += AxisValue * DepthScrollSpeed;
 		RightHandDepth = FMath::Clamp(RightHandDepth, 20.0f, 300.0f);
@@ -198,5 +221,53 @@ void ASurgeonPawn::RotateHandRoll(float AxisValue)
 	if (bIsRotatingHand && AxisValue != 0.0f)
 	{
 		RightHandMesh->AddLocalRotation(FRotator(0.0f, 0.0f, AxisValue * 3.0f));
+	}
+}
+
+void ASurgeonPawn::StartInstrumentRotation()
+{
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		PC->GetMousePosition(SavedMouseX, SavedMouseY);
+	}
+	bIsRotatingInstrument = true;
+}
+
+void ASurgeonPawn::StopInstrumentRotation()
+{
+	bIsRotatingInstrument = false;
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		PC->SetMouseLocation(FMath::RoundToInt(SavedMouseX), FMath::RoundToInt(SavedMouseY));
+	}
+}
+
+void ASurgeonPawn::RotateInstrumentPitch(float AxisValue)
+{
+	if (bIsRotatingInstrument && AxisValue != 0.0f)
+	{
+		FRotator DeltaRot(AxisValue * 3.0f, 0.0f, 0.0f);
+		GrabPoint->AddWorldRotation(DeltaRot);
+		// GrabPoint->AddLocalRotation(FQuat(FRotator(AxisValue * 3.0f, 0.0f, 0.0f)));
+	}
+}
+
+void ASurgeonPawn::RotateInstrumentYaw(float AxisValue)
+{
+	if (bIsRotatingInstrument && AxisValue != 0.0f)
+	{
+		FRotator DeltaRot(0.0f, AxisValue * 3.0f, 0.0f);
+		GrabPoint->AddWorldRotation(DeltaRot);
+		// GrabPoint->AddLocalRotation(FQuat(FRotator(0.0f, AxisValue * 3.0f, 0.0f)));
+	}
+}
+
+void ASurgeonPawn::RotateInstrumentRoll(float AxisValue)
+{
+	if (bIsRotatingInstrument && AxisValue != 0.0f)
+	{
+		FRotator DeltaRot(0.0f, 0.0f, AxisValue * 3.0f);
+		GrabPoint->AddWorldRotation(DeltaRot);
+		// GrabPoint->AddLocalRotation(FQuat(FRotator(0.0f, 0.0f, AxisValue * 3.0f)));
 	}
 }

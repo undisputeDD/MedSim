@@ -26,6 +26,19 @@ public:
 
 protected:
 
+	// -> Instrument rotation
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	USceneComponent* GrabPoint;
+
+	bool bIsRotatingInstrument = false;
+
+	void StartInstrumentRotation();
+	void StopInstrumentRotation();
+	void RotateInstrumentPitch(float AxisValue);
+	void RotateInstrumentYaw(float AxisValue);
+	void RotateInstrumentRoll(float AxisValue);
+	// Instrument rotation <-
+
 	// -> Initial settings
 	void ReturnHand();
 
