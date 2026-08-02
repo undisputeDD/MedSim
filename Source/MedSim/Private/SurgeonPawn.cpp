@@ -2,6 +2,7 @@
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "PhysicsEngine/PhysicsHandleComponent.h"
+#include "MedicalInstrument.h"
 
 const float HAND_OFFSET = 30.f;
 const float GRAB_DEPTH = 10.f;
@@ -150,6 +151,13 @@ void ASurgeonPawn::GrabObject()
 
 				if (HitComp && HitComp->IsSimulatingPhysics())
 				{
+					AActor* HitActor = HitResult.GetActor();
+					if (AMedicalInstrument* Instrument = Cast<AMedicalInstrument>(HitActor))
+					{
+						UE_LOG(LogTemp, Display, TEXT("SetHeldStatus"));
+						Instrument->SetHeldStatus(true, this);
+					}
+
 					GrabPoint->SetWorldLocation(HitResult.ImpactPoint);
 
 					GrabPoint->SetRelativeRotation(FRotator::ZeroRotator);
@@ -163,8 +171,12 @@ void ASurgeonPawn::GrabObject()
 
 void ASurgeonPawn::ReleaseObject()
 {
-	if (PhysicsHandle && PhysicsHandle->GetGrabbedComponent())
+	if (UPrimitiveComponent* GrabbedComp = PhysicsHandle->GetGrabbedComponent())
 	{
+		if (AMedicalInstrument* Instrument = Cast<AMedicalInstrument>(GrabbedComp->GetOwner()))
+		{
+			Instrument->SetHeldStatus(false);
+		}
 		PhysicsHandle->ReleaseComponent();
 	}
 }

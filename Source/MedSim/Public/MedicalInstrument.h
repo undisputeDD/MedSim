@@ -14,6 +14,8 @@ class MEDSIM_API AMedicalInstrument : public AActor
 public:	
 	AMedicalInstrument();
 
+	void SetHeldStatus(bool bStatus, AActor* NewOwner = nullptr);
+
 protected:
 	virtual void BeginPlay() override;
 

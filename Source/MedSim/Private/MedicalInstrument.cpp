@@ -18,6 +18,20 @@ AMedicalInstrument::AMedicalInstrument()
 	InstrumentMesh->SetAngularDamping(0.5f);
 }
 
+void AMedicalInstrument::SetHeldStatus(bool bStatus, AActor* NewOwner)
+{
+	bIsHeld = bStatus;
+
+	if (bStatus && NewOwner)
+	{
+		SetOwner(NewOwner);
+	}
+	else
+	{
+		SetOwner(nullptr);
+	}
+}
+
 void AMedicalInstrument::BeginPlay()
 {
 	Super::BeginPlay();
