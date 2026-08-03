@@ -154,7 +154,7 @@ void ASurgeonPawn::GrabObject()
 					AActor* HitActor = HitResult.GetActor();
 					if (AMedicalInstrument* Instrument = Cast<AMedicalInstrument>(HitActor))
 					{
-						UE_LOG(LogTemp, Display, TEXT("SetHeldStatus"));
+						// UE_LOG(LogTemp, Display, TEXT("SetHeldStatus"));
 						Instrument->SetHeldStatus(true, this);
 					}
 

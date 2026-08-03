@@ -20,4 +20,9 @@ protected:
 
 private:
 	void PerformCutTrace();
+	void ResetCutCooldown();
+
+private:
+	bool bCanCut = true;
+	FTimerHandle CutCooldownTimer;
 };
