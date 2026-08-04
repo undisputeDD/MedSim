@@ -2,6 +2,7 @@
 #include "KismetProceduralMeshLibrary.h"
 #include "ProceduralMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "TissueManagerSubsystem.h"
 
 ATissueBlock::ATissueBlock()
 {
@@ -38,9 +39,9 @@ void ATissueBlock::SliceTissue(UPrimitiveComponent* HitComponent, FVector SliceL
 
 	if (OutOtherHalf)
 	{
-		UE_LOG(LogTemp, Display, TEXT("SliceTissue inside if"));
-		OutOtherHalf->bUseComplexAsSimpleCollision = true;
-		OutOtherHalf->SetCollisionProfileName(TEXT("BlockAll"));
+		OutOtherHalf->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+
+		OnTissueSliced.Broadcast(OutOtherHalf);
 	}
 }
 
@@ -48,7 +49,7 @@ void ATissueBlock::BeginPlay()
 {
 	Super::BeginPlay();
 	
-	if (BaseMesh && ProceduralMesh)
+	if (!bIsSlicedPiece && BaseMesh && ProceduralMesh)
 	{
 		UKismetProceduralMeshLibrary::CopyProceduralMeshFromStaticMeshComponent(
 			BaseMesh,
@@ -59,5 +60,13 @@ void ATissueBlock::BeginPlay()
 
 		BaseMesh->SetVisibility(false);
 		BaseMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		if (UTissueManagerSubsystem* Manager = World->GetSubsystem<UTissueManagerSubsystem>())
+		{
+			Manager->RegisterTissueBlock(this);
+		}
 	}
 }
