@@ -60,21 +60,12 @@ void AScalpel::PerformCutTrace()
 
         if (bHit)
         {
-            UE_LOG(LogTemp, Display, TEXT("bHit"));
             FVector CutPointLog = HitResult.ImpactPoint;
             DrawDebugSphere(GetWorld(), CutPointLog, 1.0f, 8, FColor::Red, false, 2.0f);
 
             ATissueBlock* HitTissue = Cast<ATissueBlock>(HitResult.GetActor());
             if (HitTissue)
             {
-                UE_LOG(LogTemp, Display, TEXT("HitTissue"));
-                FVector CutPoint = HitResult.ImpactPoint;
-
-                // It can be GetRightVector(), GetUpVector() или GetForwardVector(). 
-                FVector CutNormal = InstrumentMesh->GetForwardVector();
-
-                HitTissue->SliceTissue(HitResult.GetComponent(), CutPoint, CutNormal);
-
                 bCanCut = false;
                 GetWorld()->GetTimerManager().SetTimer(CutCooldownTimer, this, &AScalpel::ResetCutCooldown, 0.5f, false);
                 break;

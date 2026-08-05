@@ -4,10 +4,8 @@
 #include "GameFramework/Actor.h"
 #include "TissueBlock.generated.h"
 
-class UProceduralMeshComponent;
+class UDynamicMeshComponent;
 class UStaticMeshComponent;
-
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTissueSlicedSignature, UProceduralMeshComponent*, NewMeshComponent);
 
 UCLASS()
 class MEDSIM_API ATissueBlock : public AActor
@@ -17,14 +15,6 @@ class MEDSIM_API ATissueBlock : public AActor
 public:	
 	ATissueBlock();
 
-	void SliceTissue(class UPrimitiveComponent* HitComponent, FVector SliceLocation, FVector SliceNormal);
-
-	UPROPERTY(BlueprintAssignable, Category = "MedSim|Events")
-	FOnTissueSlicedSignature OnTissueSliced;
-
-	UPROPERTY()
-	bool bIsSlicedPiece = false;
-
 protected:
 	virtual void BeginPlay() override;
 
@@ -33,5 +23,5 @@ public:
 	UStaticMeshComponent* BaseMesh;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MedSim|Tissue")
-	UProceduralMeshComponent* ProceduralMesh;
+	UDynamicMeshComponent* DynamicMeshComponent;
 };

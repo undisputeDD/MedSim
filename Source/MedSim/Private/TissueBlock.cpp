@@ -1,8 +1,8 @@
 #include "TissueBlock.h"
-#include "KismetProceduralMeshLibrary.h"
-#include "ProceduralMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "TissueManagerSubsystem.h"
+#include "Components/DynamicMeshComponent.h"
+#include "GeometryScript/MeshAssetFunctions.h"
+#include "UDynamicMesh.h"
 
 ATissueBlock::ATissueBlock()
 {
@@ -11,62 +11,40 @@ ATissueBlock::ATissueBlock()
 	BaseMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BaseMesh"));
 	RootComponent = BaseMesh;
 
-	ProceduralMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("ProceduralMesh"));
-	ProceduralMesh->SetupAttachment(RootComponent);
+	DynamicMeshComponent = CreateDefaultSubobject<UDynamicMeshComponent>(TEXT("DynamicMesh"));
+	DynamicMeshComponent->SetupAttachment(RootComponent);
 
-	ProceduralMesh->bUseComplexAsSimpleCollision = true;
-	ProceduralMesh->SetCollisionProfileName(TEXT("BlockAll"));
-}
-
-void ATissueBlock::SliceTissue(UPrimitiveComponent* HitComponent, FVector SliceLocation, FVector SliceNormal)
-{
-	UProceduralMeshComponent* TargetProcMesh = Cast<UProceduralMeshComponent>(HitComponent);
-	if (!TargetProcMesh) return;
-
-	UProceduralMeshComponent* OutOtherHalf = nullptr;
-
-	UE_LOG(LogTemp, Display, TEXT("SliceTissue"));
-
-	UKismetProceduralMeshLibrary::SliceProceduralMesh(
-		TargetProcMesh,
-		SliceLocation,
-		SliceNormal,
-		true,
-		OutOtherHalf,
-		EProcMeshSliceCapOption::CreateNewSectionForCap,
-		nullptr
-	);
-
-	if (OutOtherHalf)
-	{
-		OutOtherHalf->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
-
-		OnTissueSliced.Broadcast(OutOtherHalf);
-	}
+	DynamicMeshComponent->SetCollisionProfileName(TEXT("BlockAll"));
+	DynamicMeshComponent->bEnableComplexCollision = true;
 }
 
 void ATissueBlock::BeginPlay()
 {
 	Super::BeginPlay();
 	
-	if (!bIsSlicedPiece && BaseMesh && ProceduralMesh)
+	if (BaseMesh && BaseMesh->GetStaticMesh() && DynamicMeshComponent)
 	{
-		UKismetProceduralMeshLibrary::CopyProceduralMeshFromStaticMeshComponent(
-			BaseMesh,
-			0,
-			ProceduralMesh,
-			true
-		);
+		UDynamicMesh* TargetDynamicMesh = DynamicMeshComponent->GetDynamicMesh();
 
-		BaseMesh->SetVisibility(false);
-		BaseMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	}
-
-	if (UWorld* World = GetWorld())
-	{
-		if (UTissueManagerSubsystem* Manager = World->GetSubsystem<UTissueManagerSubsystem>())
+		if (TargetDynamicMesh)
 		{
-			Manager->RegisterTissueBlock(this);
+			EGeometryScriptOutcomePins Outcome;
+
+			UGeometryScriptLibrary_StaticMeshFunctions::CopyMeshFromStaticMesh(
+				BaseMesh->GetStaticMesh(),
+				TargetDynamicMesh,
+				FGeometryScriptCopyMeshFromAssetOptions(),
+				FGeometryScriptMeshReadLOD(),
+				Outcome
+			);
+
+			if (Outcome == EGeometryScriptOutcomePins::Success)
+			{
+				BaseMesh->SetVisibility(false);
+				BaseMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+				DynamicMeshComponent->UpdateCollision(true);
+			}
 		}
 	}
 }
