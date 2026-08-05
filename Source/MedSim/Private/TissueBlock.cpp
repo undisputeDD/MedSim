@@ -8,14 +8,16 @@ ATissueBlock::ATissueBlock()
 {
 	PrimaryActorTick.bCanEverTick = false;
 
-	BaseMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BaseMesh"));
-	RootComponent = BaseMesh;
-
 	DynamicMeshComponent = CreateDefaultSubobject<UDynamicMeshComponent>(TEXT("DynamicMesh"));
-	DynamicMeshComponent->SetupAttachment(RootComponent);
+	RootComponent = DynamicMeshComponent;
+
+	BaseMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BaseMesh"));
+	BaseMesh->SetupAttachment(DynamicMeshComponent);
 
 	DynamicMeshComponent->SetCollisionProfileName(TEXT("BlockAll"));
 	DynamicMeshComponent->bEnableComplexCollision = true;
+	DynamicMeshComponent->bDeferCollisionUpdates = false;
+	DynamicMeshComponent->CollisionType = ECollisionTraceFlag::CTF_UseComplexAsSimple;
 }
 
 void ATissueBlock::BeginPlay()
@@ -40,10 +42,27 @@ void ATissueBlock::BeginPlay()
 
 			if (Outcome == EGeometryScriptOutcomePins::Success)
 			{
+				GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, TEXT("TissueBlock: Dynamic Mesh successfully generated!"));
+
+				UMaterialInterface* BaseMaterial = BaseMesh->GetMaterial(0);
+				if (BaseMaterial)
+				{
+					DynamicMeshComponent->SetMaterial(0, BaseMaterial);
+				}
+
+				DynamicMeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+				DynamicMeshComponent->SetCollisionObjectType(ECollisionChannel::ECC_WorldStatic);
+				DynamicMeshComponent->SetCollisionResponseToAllChannels(ECR_Block);
+
+				DynamicMeshComponent->bEnableComplexCollision = true;
+				DynamicMeshComponent->CollisionType = ECollisionTraceFlag::CTF_UseComplexAsSimple;
+
+				DynamicMeshComponent->NotifyMeshUpdated();
+				DynamicMeshComponent->UpdateCollision(true);
+				DynamicMeshComponent->RecreatePhysicsState();
+
 				BaseMesh->SetVisibility(false);
 				BaseMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-
-				DynamicMeshComponent->UpdateCollision(true);
 			}
 		}
 	}
