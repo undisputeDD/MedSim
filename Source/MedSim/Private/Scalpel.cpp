@@ -66,6 +66,10 @@ void AScalpel::PerformCutTrace()
             ATissueBlock* HitTissue = Cast<ATissueBlock>(HitResult.GetActor());
             if (HitTissue)
             {
+                FVector CutNormal = InstrumentMesh->GetRightVector();
+
+                HitTissue->MakeIncision(HitResult.ImpactPoint, CutNormal);
+
                 bCanCut = false;
                 GetWorld()->GetTimerManager().SetTimer(CutCooldownTimer, this, &AScalpel::ResetCutCooldown, 0.5f, false);
                 break;

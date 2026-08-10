@@ -15,6 +15,8 @@ class MEDSIM_API ATissueBlock : public AActor
 public:	
 	ATissueBlock();
 
+	void MakeIncision(FVector CutLocation, FVector CutNormal);
+
 protected:
 	virtual void BeginPlay() override;
 
