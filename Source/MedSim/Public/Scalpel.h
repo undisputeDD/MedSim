@@ -5,6 +5,7 @@
 #include "Scalpel.generated.h"
 
 class ATissueBlock;
+class USplineComponent;
 
 UCLASS()
 class MEDSIM_API AScalpel : public AMedicalInstrument
@@ -16,13 +17,17 @@ public:
 
 protected:
 	virtual void Tick(float DeltaTime) override;
+	virtual void BeginPlay() override;
 
 private:
 	void PerformCutTrace();
 
-private:
+protected:
 	bool bIsCutting = false;
 
 	UPROPERTY()
 	ATissueBlock* CurrentTissue;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MedSim|Instrument")
+	USplineComponent* BladeEdgeSpline;
 };

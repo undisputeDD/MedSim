@@ -21,11 +21,17 @@ ATissueBlock::ATissueBlock()
 	DynamicMeshComponent->bEnableComplexCollision = true;
 	DynamicMeshComponent->bDeferCollisionUpdates = false;
 	DynamicMeshComponent->CollisionType = ECollisionTraceFlag::CTF_UseComplexAsSimple;
+
+	IncisionSpline = CreateDefaultSubobject<USplineComponent>(TEXT("IncisionSpline"));
+	IncisionSpline->SetupAttachment(RootComponent);
+	IncisionSpline->ClearSplinePoints();
 }
 
 void ATissueBlock::AddIncisionPoint(FVector HitLocation, FVector HitNormal, float CutDepth)
 {
 	CurrentIncisionPath.Add(FIncisionPoint(HitLocation, HitNormal, CutDepth));
+
+	if (!IncisionSpline) return;
 
 	IncisionSpline->AddSplinePoint(HitLocation, ESplineCoordinateSpace::World, true);
 
