@@ -18,68 +18,54 @@ void AScalpel::Tick(float DeltaTime)
 
 void AScalpel::PerformCutTrace()
 {
-    // UE_LOG(LogTemp, Display, TEXT("PerformCutTrace called"));
+    FVector BladeEdge = InstrumentMesh->GetSocketLocation(FName("BladeMiddle"));
 
-    TArray<FName> BladeSockets = {
-        FName("BladeStart"),
-        FName("BladeBottom1"),
-        FName("BladeBottom2"),
-        FName("BladeMiddle"),
-        FName("BladeUp2"),
-        FName("BladeUp1"),
-        FName("BladeEnd")
-    };
+    FVector BladeForwardDirection = InstrumentMesh->GetForwardVector();
+
+    FVector RayStart = BladeEdge + (BladeForwardDirection * 3.0f);
+    FVector RayEnd = BladeEdge;
 
     FCollisionQueryParams Params;
     Params.AddIgnoredActor(this);
     Params.AddIgnoredActor(GetOwner());
     Params.bTraceComplex = true;
 
-    for (int32 i = 0; i < BladeSockets.Num() - 1; ++i)
+    FHitResult HitResult;
+
+    bool bHit = GetWorld()->LineTraceSingleByChannel(
+        HitResult,
+        RayStart,
+        RayEnd,
+        ECC_Visibility,
+        Params
+    );
+
+    DrawDebugLine(GetWorld(), RayStart, RayEnd, FColor::Cyan, false, -1.0f, 0, 0.5f);
+
+    if (bHit)
     {
-        // UE_LOG(LogTemp, Display, TEXT("PerformCutTrace for loop %d"), i);
-
-        if (!bCanCut) break;
-
-        // UE_LOG(LogTemp, Display, TEXT("PerformCutTrace for loop after if"));
-
-        FVector SegmentStart = InstrumentMesh->GetSocketLocation(BladeSockets[i]);
-        FVector SegmentEnd = InstrumentMesh->GetSocketLocation(BladeSockets[i + 1]);
-
-        FHitResult HitResult;
-
-        bool bHit = GetWorld()->LineTraceSingleByChannel(
-            HitResult,
-            SegmentStart,
-            SegmentEnd,
-            ECC_Visibility,
-            Params
-        );
-
-        DrawDebugLine(GetWorld(), SegmentStart, SegmentEnd, FColor::Green, false, -1.0f, 0, 0.5f);
-
-        if (bHit)
+        if (!bIsCutting || CurrentTissue != HitResult.GetActor())
         {
-            FVector CutPointLog = HitResult.ImpactPoint;
-            DrawDebugSphere(GetWorld(), CutPointLog, 1.0f, 8, FColor::Red, false, 2.0f);
-
-            ATissueBlock* HitTissue = Cast<ATissueBlock>(HitResult.GetActor());
-            if (HitTissue)
+            CurrentTissue = Cast<ATissueBlock>(HitResult.GetActor());
+            if (CurrentTissue)
             {
-                FVector CutNormal = InstrumentMesh->GetRightVector();
-
-                HitTissue->MakeIncision(HitResult.ImpactPoint, CutNormal);
-
-                bCanCut = false;
-                GetWorld()->GetTimerManager().SetTimer(CutCooldownTimer, this, &AScalpel::ResetCutCooldown, 0.5f, false);
-                break;
+                bIsCutting = true;
             }
         }
-    }
-}
 
-void AScalpel::ResetCutCooldown()
-{
-    UE_LOG(LogTemp, Display, TEXT("ResetCutCooldown Timer fired!"));
-    bCanCut = true;
+        if (bIsCutting && CurrentTissue)
+        {
+            float CutDepthMM = FVector::Distance(HitResult.ImpactPoint, RayEnd) * 10.0f;
+
+            CurrentTissue->AddIncisionPoint(HitResult.ImpactPoint, HitResult.ImpactNormal, CutDepthMM);
+        }
+    }
+    else
+    {
+        if (bIsCutting)
+        {
+            bIsCutting = false;
+            CurrentTissue = nullptr;
+        }
+    }
 }

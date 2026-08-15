@@ -1,6 +1,7 @@
 #include "TissueBlock.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/DynamicMeshComponent.h"
+#include "Components/SplineComponent.h"
 #include "GeometryScript/MeshAssetFunctions.h"
 #include "GeometryScript/MeshBooleanFunctions.h"
 #include "GeometryScript/MeshPrimitiveFunctions.h"
@@ -22,47 +23,22 @@ ATissueBlock::ATissueBlock()
 	DynamicMeshComponent->CollisionType = ECollisionTraceFlag::CTF_UseComplexAsSimple;
 }
 
-void ATissueBlock::MakeIncision(FVector CutLocation, FVector CutNormal)
+void ATissueBlock::AddIncisionPoint(FVector HitLocation, FVector HitNormal, float CutDepth)
 {
-	if (!DynamicMeshComponent || !DynamicMeshComponent->GetDynamicMesh()) return;
+	CurrentIncisionPath.Add(FIncisionPoint(HitLocation, HitNormal, CutDepth));
 
-	FTransform BlockTransform = DynamicMeshComponent->GetComponentTransform();
+	IncisionSpline->AddSplinePoint(HitLocation, ESplineCoordinateSpace::World, true);
 
-	FVector LocalCutLocation = BlockTransform.InverseTransformPosition(CutLocation);
-	FVector LocalCutNormal = BlockTransform.InverseTransformVectorNoScale(CutNormal);
+	int32 LastPointIndex = IncisionSpline->GetNumberOfSplinePoints() - 1;
+	IncisionSpline->SetSplinePointType(LastPointIndex, ESplinePointType::Curve);
 
-	LocalCutLocation -= LocalCutNormal * 2.0f;
+	if (LastPointIndex > 0)
+	{
+		FVector PrevLocation = IncisionSpline->GetLocationAtSplinePoint(LastPointIndex - 1, ESplineCoordinateSpace::World);
+		FVector CurrentLocation = IncisionSpline->GetLocationAtSplinePoint(LastPointIndex, ESplineCoordinateSpace::World);
 
-	UDynamicMesh* ToolMesh = NewObject<UDynamicMesh>();
-
-	FTransform ToolTransform;
-	ToolTransform.SetLocation(LocalCutLocation);
-	ToolTransform.SetRotation(FRotationMatrix::MakeFromZ(LocalCutNormal).ToQuat());
-
-	FGeometryScriptPrimitiveOptions PrimOptions;
-	UGeometryScriptLibrary_MeshPrimitiveFunctions::AppendBox(
-		ToolMesh,
-		PrimOptions,
-		FTransform::Identity,
-		15.0f,
-		3.0f,
-		5.0f,
-		1, 1, 1
-	);
-
-	FGeometryScriptMeshBooleanOptions BooleanOptions;
-	UGeometryScriptLibrary_MeshBooleanFunctions::ApplyMeshBoolean(
-		DynamicMeshComponent->GetDynamicMesh(),
-		FTransform::Identity,
-		ToolMesh,
-		ToolTransform,
-		EGeometryScriptBooleanOperation::Subtract,
-		BooleanOptions
-	);
-
-	DynamicMeshComponent->NotifyMeshUpdated();
-	DynamicMeshComponent->UpdateCollision(false);
-	DynamicMeshComponent->RecreatePhysicsState();
+		DrawDebugLine(GetWorld(), PrevLocation, CurrentLocation, FColor::Red, false, 5.0f, 0, 2.0f);
+	}
 }
 
 void ATissueBlock::BeginPlay()

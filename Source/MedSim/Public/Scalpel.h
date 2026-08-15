@@ -4,9 +4,8 @@
 #include "MedicalInstrument.h"
 #include "Scalpel.generated.h"
 
-/**
- * 
- */
+class ATissueBlock;
+
 UCLASS()
 class MEDSIM_API AScalpel : public AMedicalInstrument
 {
@@ -20,9 +19,10 @@ protected:
 
 private:
 	void PerformCutTrace();
-	void ResetCutCooldown();
 
 private:
-	bool bCanCut = true;
-	FTimerHandle CutCooldownTimer;
+	bool bIsCutting = false;
+
+	UPROPERTY()
+	ATissueBlock* CurrentTissue;
 };
