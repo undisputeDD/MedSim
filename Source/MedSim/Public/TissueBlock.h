@@ -7,6 +7,8 @@
 class UDynamicMeshComponent;
 class UStaticMeshComponent;
 class USplineComponent;
+class UTextureRenderTarget2D;
+class UMaterialInstanceDynamic;
 
 USTRUCT(BlueprintType)
 struct FIncisionPoint
@@ -22,11 +24,14 @@ struct FIncisionPoint
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	float Depth;
 
-	FIncisionPoint()
-		: Location(FVector::ZeroVector), SurfaceNormal(FVector::UpVector), Depth(0.0f) {}
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	FVector2D UVCoordinate;
 
-	FIncisionPoint(FVector InLoc, FVector InNormal, float InDepth)
-		: Location(InLoc), SurfaceNormal(InNormal), Depth(InDepth) {}
+	FIncisionPoint()
+		: Location(FVector::ZeroVector), SurfaceNormal(FVector::UpVector), Depth(0.0f), UVCoordinate(FVector2D::ZeroVector) {}
+
+	FIncisionPoint(FVector InLoc, FVector InNormal, float InDepth, FVector2D InUV)
+		: Location(InLoc), SurfaceNormal(InNormal), Depth(InDepth), UVCoordinate(InUV) {}
 };
 
 UCLASS()
@@ -37,7 +42,7 @@ class MEDSIM_API ATissueBlock : public AActor
 public:	
 	ATissueBlock();
 
-	void AddIncisionPoint(FVector HitLocation, FVector HitNormal, float CutDepth);
+	void AddIncisionPoint(FVector HitLocation, FVector HitNormal, float CutDepth, FVector2D HitUV);
 
 protected:
 	virtual void BeginPlay() override;
@@ -54,4 +59,13 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MedSim|Tissue")
 	USplineComponent* IncisionSpline;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MedSim|Shaders")
+	UTextureRenderTarget2D* CutMaskRenderTarget;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MedSim|Shaders")
+	UMaterialInstanceDynamic* DynamicTissueMaterial;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "MedSim|Shaders")
+	UMaterialInterface* BrushMaterialClass;
 };

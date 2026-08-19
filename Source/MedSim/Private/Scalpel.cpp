@@ -1,6 +1,7 @@
 #include "Scalpel.h"
 #include "TissueBlock.h"
 #include "Components/SplineComponent.h"
+#include "Kismet/GameplayStatics.h"
 
 AScalpel::AScalpel()
 {
@@ -38,6 +39,7 @@ void AScalpel::PerformCutTrace()
 	Params.AddIgnoredActor(this);
 	Params.AddIgnoredActor(GetOwner());
 	Params.bTraceComplex = true;
+	Params.bReturnFaceIndex = true;
 
 	float BladeLengthCM = BladeEdgeSpline->GetSplineLength();
 
@@ -48,6 +50,7 @@ void AScalpel::PerformCutTrace()
 	float MaxCutDepthMM = -1.0f;
 	FVector DeepestHitLocation = FVector::ZeroVector;
 	FVector DeepestHitNormal = FVector::UpVector;
+	FVector2D DeepestHitUV = FVector2D::ZeroVector;
 	ATissueBlock* HitTissueThisFrame = nullptr;
 
 	FVector BladeForwardDir = InstrumentMesh->GetForwardVector();
@@ -77,6 +80,7 @@ void AScalpel::PerformCutTrace()
 				DeepestHitNormal = HitResult.ImpactNormal;
 				HitTissueThisFrame = Cast<ATissueBlock>(HitResult.GetActor());
 				bHitAnything = true;
+				UGameplayStatics::FindCollisionUV(HitResult, 0, DeepestHitUV);
 			}
 		}
 	}
@@ -91,7 +95,7 @@ void AScalpel::PerformCutTrace()
 
 		if (bIsCutting && CurrentTissue)
 		{
-			CurrentTissue->AddIncisionPoint(DeepestHitLocation, DeepestHitNormal, MaxCutDepthMM);
+			CurrentTissue->AddIncisionPoint(DeepestHitLocation, DeepestHitNormal, MaxCutDepthMM, DeepestHitUV);
 		}
 	}
 	else

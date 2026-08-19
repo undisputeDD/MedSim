@@ -6,6 +6,11 @@
 #include "GeometryScript/MeshBooleanFunctions.h"
 #include "GeometryScript/MeshPrimitiveFunctions.h"
 #include "UDynamicMesh.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "Kismet/KismetRenderingLibrary.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Engine/Canvas.h"
+#include "Kismet/KismetRenderingLibrary.h"
 
 ATissueBlock::ATissueBlock()
 {
@@ -27,23 +32,35 @@ ATissueBlock::ATissueBlock()
 	IncisionSpline->ClearSplinePoints();
 }
 
-void ATissueBlock::AddIncisionPoint(FVector HitLocation, FVector HitNormal, float CutDepth)
+void ATissueBlock::AddIncisionPoint(FVector HitLocation, FVector HitNormal, float CutDepth, FVector2D HitUV)
 {
-	CurrentIncisionPath.Add(FIncisionPoint(HitLocation, HitNormal, CutDepth));
+	CurrentIncisionPath.Add(FIncisionPoint(HitLocation, HitNormal, CutDepth, HitUV));
 
 	if (!IncisionSpline) return;
 
 	IncisionSpline->AddSplinePoint(HitLocation, ESplineCoordinateSpace::World, true);
-
 	int32 LastPointIndex = IncisionSpline->GetNumberOfSplinePoints() - 1;
 	IncisionSpline->SetSplinePointType(LastPointIndex, ESplinePointType::Curve);
 
-	if (LastPointIndex > 0)
+	if (CutMaskRenderTarget && BrushMaterialClass)
 	{
-		FVector PrevLocation = IncisionSpline->GetLocationAtSplinePoint(LastPointIndex - 1, ESplineCoordinateSpace::World);
-		FVector CurrentLocation = IncisionSpline->GetLocationAtSplinePoint(LastPointIndex, ESplineCoordinateSpace::World);
+		UCanvas* Canvas = nullptr;
+		FVector2D Size;
+		FDrawToRenderTargetContext Context;
 
-		DrawDebugLine(GetWorld(), PrevLocation, CurrentLocation, FColor::Red, false, 5.0f, 0, 2.0f);
+		UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(GetWorld(), CutMaskRenderTarget, Canvas, Size, Context);
+
+		if (Canvas)
+		{
+			float BrushSize = FMath::Clamp(CutDepth * 0.8f, 2.0f, 8.0f);
+
+			FVector2D DrawPos = FVector2D((HitUV.X * Size.X) - (BrushSize / 2.0f), (HitUV.Y * Size.Y) - (BrushSize / 2.0f));
+			FVector2D DrawSize = FVector2D(BrushSize, BrushSize);
+
+			Canvas->K2_DrawMaterial(BrushMaterialClass, DrawPos, DrawSize, FVector2D(0.f, 0.f), FVector2D(1.f, 1.f), 0.0f, FVector2D(0.5f, 0.5f));
+		}
+
+		UKismetRenderingLibrary::EndDrawCanvasToRenderTarget(GetWorld(), Context);
 	}
 }
 
@@ -71,12 +88,6 @@ void ATissueBlock::BeginPlay()
 			{
 				GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, TEXT("TissueBlock: Dynamic Mesh successfully generated!"));
 
-				UMaterialInterface* BaseMaterial = BaseMesh->GetMaterial(0);
-				if (BaseMaterial)
-				{
-					DynamicMeshComponent->SetMaterial(0, BaseMaterial);
-				}
-
 				DynamicMeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 				DynamicMeshComponent->SetCollisionObjectType(ECollisionChannel::ECC_WorldStatic);
 				DynamicMeshComponent->SetCollisionResponseToAllChannels(ECR_Block);
@@ -87,6 +98,25 @@ void ATissueBlock::BeginPlay()
 				DynamicMeshComponent->NotifyMeshUpdated();
 				DynamicMeshComponent->UpdateCollision(true);
 				DynamicMeshComponent->RecreatePhysicsState();
+
+				CutMaskRenderTarget = UKismetRenderingLibrary::CreateRenderTarget2D(this, 1024, 1024, RTF_RGBA16f);
+				if (CutMaskRenderTarget)
+				{
+					UKismetRenderingLibrary::ClearRenderTarget2D(this, CutMaskRenderTarget, FLinearColor::Black);
+				}
+
+				UMaterialInterface* BaseMaterial = BaseMesh->GetMaterial(0);
+				if (BaseMaterial)
+				{
+					DynamicTissueMaterial = UMaterialInstanceDynamic::Create(BaseMaterial, this);
+
+					if (DynamicTissueMaterial && CutMaskRenderTarget)
+					{
+						DynamicTissueMaterial->SetTextureParameterValue(FName("CutMask"), CutMaskRenderTarget);
+					}
+
+					DynamicMeshComponent->SetMaterial(0, DynamicTissueMaterial);
+				}
 
 				BaseMesh->SetVisibility(false);
 				BaseMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
