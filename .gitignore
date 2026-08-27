@@ -13,6 +13,7 @@ Saved/
 .vscode/
 .idea/
 *.sln
+*.slnx
 *.xcodeproj
 *.xcworkspace
 *.opensdf

@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "5.7",
+	"EngineAssociation": "{3C2E804F-40F4-A2FF-60C7-5DBD2FED5E25}",
 	"Category": "",
 	"Description": "",
 	"Modules": [
@@ -27,6 +27,14 @@
 		},
 		{
 			"Name": "ChaosFlesh",
+			"Enabled": true
+		},
+		{
+			"Name": "MLDeformerFramework",
+			"Enabled": true
+		},
+		{
+			"Name": "NeuralMorphModel",
 			"Enabled": true
 		}
 	]
