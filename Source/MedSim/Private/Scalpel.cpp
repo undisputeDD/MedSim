@@ -66,6 +66,8 @@ void AScalpel::PerformCutTrace()
 
 		DrawDebugLine(GetWorld(), RayStart, RayEnd, FColor::Cyan, false, -1.0f, 0, 0.2f);
 
+		// UE_LOG(LogTemp, Error, TEXT("%d NumSample"), i);
+
 		if (bLocalHit)
 		{
 			ATissueBlock* HitBlock = Cast<ATissueBlock>(HitResult.GetActor());
@@ -86,7 +88,7 @@ void AScalpel::PerformCutTrace()
 
 		if (bIsCutting && CurrentTissue)
 		{
-			UE_LOG(LogTemp, Error, TEXT("ApplyCut"));
+			// UE_LOG(LogTemp, Error, TEXT("ApplyCut"));
 			CurrentTissue->ApplyCut(CurrentBladePoints);
 		}
 	}

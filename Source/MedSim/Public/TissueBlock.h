@@ -5,6 +5,8 @@
 #include "TissueBlock.generated.h"
 
 class UFleshComponent;
+class UDeformableSolverComponent;
+class UDeformableCollisionsComponent;
 
 UCLASS()
 class MEDSIM_API ATissueBlock : public AActor
@@ -23,4 +25,10 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MedSim|Tissue")
 	UFleshComponent* FleshComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MedSim|Tissue")
+	UDeformableSolverComponent* DeformableSolverComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MedSim|Tissue")
+	UDeformableCollisionsComponent* DeformableCollisionsComponent;
 };
