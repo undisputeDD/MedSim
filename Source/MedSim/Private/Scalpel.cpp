@@ -39,19 +39,14 @@ void AScalpel::PerformCutTrace()
 	Params.AddIgnoredActor(this);
 	Params.AddIgnoredActor(GetOwner());
 	Params.bTraceComplex = true;
-	Params.bReturnFaceIndex = true;
 
 	float BladeLengthCM = BladeEdgeSpline->GetSplineLength();
 
-	float ScanResolutionCM = 0.1f;
+	float ScanResolutionCM = 0.2f;
 	int32 NumSamples = FMath::Max(2, FMath::CeilToInt(BladeLengthCM / ScanResolutionCM));
 
-	bool bHitAnything = false;
-	float MaxCutDepthMM = -1.0f;
-	FVector DeepestHitLocation = FVector::ZeroVector;
-	FVector DeepestHitNormal = FVector::UpVector;
-	FVector2D DeepestHitUV = FVector2D::ZeroVector;
 	ATissueBlock* HitTissueThisFrame = nullptr;
+	TArray<FVector> CurrentBladePoints;
 
 	FVector BladeForwardDir = InstrumentMesh->GetForwardVector();
 
@@ -60,6 +55,8 @@ void AScalpel::PerformCutTrace()
 		float DistanceAlongSpline = (float)i * ScanResolutionCM;
 
 		FVector SamplePoint = BladeEdgeSpline->GetLocationAtDistanceAlongSpline(DistanceAlongSpline, ESplineCoordinateSpace::World);
+
+		CurrentBladePoints.Add(SamplePoint);
 
 		FVector RayStart = SamplePoint + (BladeForwardDir * 3.0f);
 		FVector RayEnd = SamplePoint;
@@ -71,21 +68,15 @@ void AScalpel::PerformCutTrace()
 
 		if (bLocalHit)
 		{
-			float LocalDepthMM = FVector::Distance(HitResult.ImpactPoint, RayEnd) * 10.0f;
-
-			if (LocalDepthMM > MaxCutDepthMM)
+			ATissueBlock* HitBlock = Cast<ATissueBlock>(HitResult.GetActor());
+			if (HitBlock)
 			{
-				MaxCutDepthMM = LocalDepthMM;
-				DeepestHitLocation = HitResult.ImpactPoint;
-				DeepestHitNormal = HitResult.ImpactNormal;
-				HitTissueThisFrame = Cast<ATissueBlock>(HitResult.GetActor());
-				bHitAnything = true;
-				UGameplayStatics::FindCollisionUV(HitResult, 0, DeepestHitUV);
+				HitTissueThisFrame = HitBlock;
 			}
 		}
 	}
 
-	if (bHitAnything && HitTissueThisFrame)
+	if (HitTissueThisFrame)
 	{
 		if (!bIsCutting || CurrentTissue != HitTissueThisFrame)
 		{
@@ -95,7 +86,7 @@ void AScalpel::PerformCutTrace()
 
 		if (bIsCutting && CurrentTissue)
 		{
-			CurrentTissue->AddIncisionPoint(DeepestHitLocation, DeepestHitNormal, MaxCutDepthMM, DeepestHitUV);
+			CurrentTissue->ApplyCut(CurrentBladePoints);
 		}
 	}
 	else

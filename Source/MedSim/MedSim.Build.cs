@@ -8,7 +8,7 @@ public class MedSim : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "GeometryFramework", "GeometryScriptingCore" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "ChaosFleshEngine", "ChaosFlesh", "DataflowCore" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 
