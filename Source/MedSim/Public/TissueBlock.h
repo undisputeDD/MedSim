@@ -5,8 +5,6 @@
 #include "TissueBlock.generated.h"
 
 class UFleshComponent;
-class USplineComponent;
-
 
 UCLASS()
 class MEDSIM_API ATissueBlock : public AActor
@@ -25,7 +23,4 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MedSim|Tissue")
 	UFleshComponent* FleshComponent;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MedSim|Tissue")
-	USplineComponent* IncisionSpline;
 };

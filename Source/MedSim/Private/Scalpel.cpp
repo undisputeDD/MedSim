@@ -86,6 +86,7 @@ void AScalpel::PerformCutTrace()
 
 		if (bIsCutting && CurrentTissue)
 		{
+			UE_LOG(LogTemp, Error, TEXT("ApplyCut"));
 			CurrentTissue->ApplyCut(CurrentBladePoints);
 		}
 	}

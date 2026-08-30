@@ -8,10 +8,6 @@ ATissueBlock::ATissueBlock()
 
     FleshComponent = CreateDefaultSubobject<UFleshComponent>(TEXT("FleshComponent"));
     RootComponent = FleshComponent;
-
-    IncisionSpline = CreateDefaultSubobject<USplineComponent>(TEXT("IncisionSpline"));
-    IncisionSpline->SetupAttachment(RootComponent);
-    IncisionSpline->ClearSplinePoints();
 }
 
 void ATissueBlock::BeginPlay()
