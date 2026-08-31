@@ -7,10 +7,14 @@ public class MedSim : ModuleRules
 	public MedSim(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "ChaosFleshEngine", "ChaosFlesh", "DataflowCore" });
 
-		PrivateDependencyModuleNames.AddRange(new string[] {  });
+        PublicDependencyModuleNames.AddRange(new string[] {
+			"Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput",
+			"Chaos", "ChaosCore", "ChaosFleshEngine", "ChaosFlesh",
+			"DataflowCore", "GeometryCollectionEngine"
+		});
+
+        PrivateDependencyModuleNames.AddRange(new string[] {  });
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });

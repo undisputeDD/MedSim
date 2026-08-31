@@ -35,46 +35,46 @@ void AScalpel::PerformCutTrace()
 {
 	if (!BladeEdgeSpline) return;
 
-	FCollisionQueryParams Params;
-	Params.AddIgnoredActor(this);
-	Params.AddIgnoredActor(GetOwner());
-	Params.bTraceComplex = true;
-
 	float BladeLengthCM = BladeEdgeSpline->GetSplineLength();
-
 	float ScanResolutionCM = 0.2f;
 	int32 NumSamples = FMath::Max(2, FMath::CeilToInt(BladeLengthCM / ScanResolutionCM));
 
-	ATissueBlock* HitTissueThisFrame = nullptr;
 	TArray<FVector> CurrentBladePoints;
-
-	FVector BladeForwardDir = InstrumentMesh->GetForwardVector();
+	ATissueBlock* HitTissueThisFrame = nullptr;
 
 	for (int32 i = 0; i < NumSamples; ++i)
 	{
 		float DistanceAlongSpline = (float)i * ScanResolutionCM;
-
 		FVector SamplePoint = BladeEdgeSpline->GetLocationAtDistanceAlongSpline(DistanceAlongSpline, ESplineCoordinateSpace::World);
-
 		CurrentBladePoints.Add(SamplePoint);
+	}
 
-		FVector RayStart = SamplePoint + (BladeForwardDir * 3.0f);
-		FVector RayEnd = SamplePoint;
+	TArray<AActor*> FoundTissues;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ATissueBlock::StaticClass(), FoundTissues);
 
-		FHitResult HitResult;
-		bool bLocalHit = GetWorld()->LineTraceSingleByChannel(HitResult, RayStart, RayEnd, ECC_Visibility, Params);
+	for (AActor* TissueActor : FoundTissues)
+	{
+		ATissueBlock* TissueBlock = Cast<ATissueBlock>(TissueActor);
+		if (!TissueBlock) continue;
 
-		DrawDebugLine(GetWorld(), RayStart, RayEnd, FColor::Cyan, false, -1.0f, 0, 0.2f);
+		FBox TissueBounds = TissueBlock->GetComponentsBoundingBox(true);
 
-		// UE_LOG(LogTemp, Error, TEXT("%d NumSample"), i);
+		TissueBounds = TissueBounds.ExpandBy(2.0f);
 
-		if (bLocalHit)
+		bool bBladeInsideBounds = false;
+		for (const FVector& Point : CurrentBladePoints)
 		{
-			ATissueBlock* HitBlock = Cast<ATissueBlock>(HitResult.GetActor());
-			if (HitBlock)
+			if (TissueBounds.IsInside(Point))
 			{
-				HitTissueThisFrame = HitBlock;
+				bBladeInsideBounds = true;
+				break;
 			}
+		}
+
+		if (bBladeInsideBounds)
+		{
+			HitTissueThisFrame = TissueBlock;
+			break;
 		}
 	}
 
@@ -84,11 +84,11 @@ void AScalpel::PerformCutTrace()
 		{
 			CurrentTissue = HitTissueThisFrame;
 			bIsCutting = true;
+			UE_LOG(LogTemp, Warning, TEXT("Inside TissueBlock!"));
 		}
 
 		if (bIsCutting && CurrentTissue)
 		{
-			// UE_LOG(LogTemp, Error, TEXT("ApplyCut"));
 			CurrentTissue->ApplyCut(CurrentBladePoints);
 		}
 	}
@@ -98,6 +98,7 @@ void AScalpel::PerformCutTrace()
 		{
 			bIsCutting = false;
 			CurrentTissue = nullptr;
+			UE_LOG(LogTemp, Warning, TEXT("Outside TissueBlock!"));
 		}
 	}
 }
