@@ -46,6 +46,29 @@ void ATissueBlock::BeginPlay()
     DeformableCollisionsComponent->EnableSimulation(DeformableSolverComponent);
 }
 
+bool IsPointInTetrahedron(const FVector3f& P, const FVector3f& V0, const FVector3f& V1, const FVector3f& V2, const FVector3f& V3)
+{
+    FVector3f d0 = V1 - V0;
+    FVector3f d1 = V2 - V0;
+    FVector3f d2 = V3 - V0;
+    FVector3f dP = P - V0;
+
+    float Det = FVector3f::DotProduct(d0, FVector3f::CrossProduct(d1, d2));
+
+    if (FMath::Abs(Det) < UE_KINDA_SMALL_NUMBER) return false;
+
+    float InvDet = 1.0f / Det;
+
+    float u = FVector3f::DotProduct(dP, FVector3f::CrossProduct(d1, d2)) * InvDet;
+    float v = FVector3f::DotProduct(d0, FVector3f::CrossProduct(dP, d2)) * InvDet;
+    float w = FVector3f::DotProduct(d0, FVector3f::CrossProduct(d1, dP)) * InvDet;
+    float x = 1.0f - u - v - w;
+
+    float Eps = -0.01f;
+
+    return (u >= Eps && v >= Eps && w >= Eps && x >= Eps);
+}
+
 void ATissueBlock::ApplyCut(const TArray<FVector>& BladePoints)
 {
     if (!FleshComponent || !FleshComponent->GetRestCollection()) return;
@@ -93,4 +116,29 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& BladePoints)
     }
 
     UE_LOG(LogTemp, Warning, TEXT("Ready to cut! Total Tetrahedrons: %d, Total Blade Points: %d"), Tetrahedrons.Num(), LocalBladePoints.Num());
+
+    TArray<int32> CutTetrahedronIndices;
+    for (int32 i = 0; i < Tetrahedrons.Num(); ++i)
+    {
+        const FIntVector4& TetIndices = Tetrahedrons[i];
+
+        FVector3f V0 = Vertices[TetIndices.X];
+        FVector3f V1 = Vertices[TetIndices.Y];
+        FVector3f V2 = Vertices[TetIndices.Z];
+        FVector3f V3 = Vertices[TetIndices.W];
+
+        for (const FVector3f& BladePoint : LocalBladePoints)
+        {
+            if (IsPointInTetrahedron(BladePoint, V0, V1, V2, V3))
+            {
+                CutTetrahedronIndices.AddUnique(i);
+                break;
+            }
+        }
+    }
+
+    if (CutTetrahedronIndices.Num() > 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Cut tetrahedrs: %d"), CutTetrahedronIndices.Num());
+    }
 }
