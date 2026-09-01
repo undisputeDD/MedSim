@@ -71,74 +71,92 @@ bool IsPointInTetrahedron(const FVector3f& P, const FVector3f& V0, const FVector
 
 void ATissueBlock::ApplyCut(const TArray<FVector>& BladePoints)
 {
-    if (!FleshComponent || !FleshComponent->GetRestCollection()) return;
+    if (!FleshComponent) return;
 
-    const UFleshAsset* FleshAsset = Cast<UFleshAsset>(FleshComponent->GetRestCollection());
-    if (!FleshAsset) return;
+    const UFleshAsset* RestAsset = Cast<UFleshAsset>(FleshComponent->GetRestCollection());
+    if (!RestAsset) return;
 
-    const FFleshCollection* CollectionPtr = FleshAsset->GetFleshCollection().Get();
-    if (!CollectionPtr)
-    {
-        UE_LOG(LogTemp, Error, TEXT("Flesh Collection is null!"));
-        return;
-    }
+    const FFleshCollection* RestCollPtr = RestAsset->GetCollection();
+    if (!RestCollPtr) return;
+    const FManagedArrayCollection& RestCollection = *RestCollPtr;
 
-    const FManagedArrayCollection& Collection = *CollectionPtr;
+    UFleshDynamicAsset* DynAsset = FleshComponent->GetDynamicCollection();
+    if (!DynAsset) return;
 
-    /*UE_LOG(LogTemp, Warning, TEXT("--- FLESH ASSET STRUCTURE ---"));
-    for (const FName& GroupName : Collection.GroupNames())
+    FManagedArrayCollection* DynCollPtr = DynAsset->GetCollection();
+    if (!DynCollPtr) return;
+    FManagedArrayCollection& DynCollection = *DynCollPtr;
+
+    USimulationAsset* SimulationAsset = FleshComponent->GetSimulationCollection();
+    if (!DynAsset) return;
+
+    FManagedArrayCollection* SimCollPtr = SimulationAsset->GetCollection();
+    if (!DynCollPtr) return;
+    FManagedArrayCollection& SimCollection = *SimCollPtr;
+
+    UE_LOG(LogTemp, Warning, TEXT("--- FLESH ASSET(Dynamic) STRUCTURE ---"));
+    for (const FName& GroupName : SimCollection.GroupNames())
     {
         UE_LOG(LogTemp, Warning, TEXT("Group: %s"), *GroupName.ToString());
 
-        for (const FName& AttrName : Collection.AttributeNames(GroupName))
+        for (const FName& AttrName : SimCollection.AttributeNames(GroupName))
         {
             UE_LOG(LogTemp, Warning, TEXT("  -> Attribute: %s"), *AttrName.ToString());
         }
     }
-    UE_LOG(LogTemp, Warning, TEXT("-----------------------------"));*/
+    UE_LOG(LogTemp, Warning, TEXT("-----------------------------"));
 
-    if (!Collection.HasGroup(FName("Tetrahedral")) || !Collection.HasGroup(FName("Vertices")))
-    {
-        UE_LOG(LogTemp, Error, TEXT("Flesh Asset does not contain Tetrahedral or Vertices groups!"));
-        return;
-    }
+    if (!RestCollection.HasGroup(FName("Tetrahedral")) || !DynCollection.HasGroup(FName("Vertices"))) return;
 
-    const TManagedArray<FVector3f>& Vertices = Collection.GetAttribute<FVector3f>(FName("Vertex"), FName("Vertices"));
-    const TManagedArray<FIntVector4>& Tetrahedrons = Collection.GetAttribute<FIntVector4>(FName("Tetrahedron"), FName("Tetrahedral"));
+    const TManagedArray<FIntVector4>& Tetrahedrons = RestCollection.GetAttribute<FIntVector4>(FName("Tetrahedron"), FName("Tetrahedral"));
+
+    const TManagedArray<FVector3f>& DynamicVertices = DynCollection.GetAttribute<FVector3f>(FName("Vertex"), FName("Vertices"));
+
+    TManagedArray<float>& Activation = DynCollection.ModifyAttribute<float>(FName("Activation"), FName("Vertices"));
 
     FTransform FleshTransform = FleshComponent->GetComponentTransform();
     TArray<FVector3f> LocalBladePoints;
-
     for (const FVector& Point : BladePoints)
     {
-        FVector LocalPoint = FleshTransform.InverseTransformPosition(Point);
-        LocalBladePoints.Add((FVector3f)LocalPoint);
+        LocalBladePoints.Add((FVector3f)FleshTransform.InverseTransformPosition(Point));
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("Ready to cut! Total Tetrahedrons: %d, Total Blade Points: %d"), Tetrahedrons.Num(), LocalBladePoints.Num());
+    bool bHasCut = false;
 
-    TArray<int32> CutTetrahedronIndices;
     for (int32 i = 0; i < Tetrahedrons.Num(); ++i)
     {
         const FIntVector4& TetIndices = Tetrahedrons[i];
 
-        FVector3f V0 = Vertices[TetIndices.X];
-        FVector3f V1 = Vertices[TetIndices.Y];
-        FVector3f V2 = Vertices[TetIndices.Z];
-        FVector3f V3 = Vertices[TetIndices.W];
+        if (Activation[TetIndices.X] == 0.0f && Activation[TetIndices.Y] == 0.0f &&
+            Activation[TetIndices.Z] == 0.0f && Activation[TetIndices.W] == 0.0f)
+        {
+            continue;
+        }
+
+        FVector3f V0 = DynamicVertices[TetIndices.X];
+        FVector3f V1 = DynamicVertices[TetIndices.Y];
+        FVector3f V2 = DynamicVertices[TetIndices.Z];
+        FVector3f V3 = DynamicVertices[TetIndices.W];
 
         for (const FVector3f& BladePoint : LocalBladePoints)
         {
             if (IsPointInTetrahedron(BladePoint, V0, V1, V2, V3))
             {
-                CutTetrahedronIndices.AddUnique(i);
+                Activation[TetIndices.X] = 0.0f;
+                Activation[TetIndices.Y] = 0.0f;
+                Activation[TetIndices.Z] = 0.0f;
+                Activation[TetIndices.W] = 0.0f;
+
+                bHasCut = true;
                 break;
             }
         }
     }
 
-    if (CutTetrahedronIndices.Num() > 0)
+    if (bHasCut)
     {
-        UE_LOG(LogTemp, Error, TEXT("Cut tetrahedrs: %d"), CutTetrahedronIndices.Num());
+        UE_LOG(LogTemp, Warning, TEXT("РАЗРЕЗ ВЫПОЛНЕН: Изменены флаги Activation в DynamicCollection!"));
+
+        FleshComponent->MarkRenderStateDirty();
     }
 }
