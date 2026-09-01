@@ -28,6 +28,9 @@ protected:
 	UPROPERTY()
 	ATissueBlock* CurrentTissue;
 
+	UPROPERTY()
+	TArray<AActor*> FoundTissues;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MedSim|Instrument")
 	USplineComponent* BladeEdgeSpline;
 };

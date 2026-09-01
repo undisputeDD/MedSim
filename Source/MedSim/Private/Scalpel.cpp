@@ -6,6 +6,7 @@
 AScalpel::AScalpel()
 {
     PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.TickInterval = 0.016f;
 
 	BladeEdgeSpline = CreateDefaultSubobject<USplineComponent>(TEXT("BladeEdgeSpline"));
 	BladeEdgeSpline->SetupAttachment(InstrumentMesh);
@@ -19,6 +20,8 @@ void AScalpel::BeginPlay()
 	{
 		BladeEdgeSpline->AttachToComponent(InstrumentMesh, FAttachmentTransformRules::KeepRelativeTransform);
 	}
+
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ATissueBlock::StaticClass(), FoundTissues);
 }
 
 void AScalpel::Tick(float DeltaTime)
@@ -48,9 +51,6 @@ void AScalpel::PerformCutTrace()
 		FVector SamplePoint = BladeEdgeSpline->GetLocationAtDistanceAlongSpline(DistanceAlongSpline, ESplineCoordinateSpace::World);
 		CurrentBladePoints.Add(SamplePoint);
 	}
-
-	TArray<AActor*> FoundTissues;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ATissueBlock::StaticClass(), FoundTissues);
 
 	for (AActor* TissueActor : FoundTissues)
 	{
