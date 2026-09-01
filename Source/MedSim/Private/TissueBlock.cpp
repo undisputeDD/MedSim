@@ -44,9 +44,207 @@ void ATissueBlock::BeginPlay()
         }
     }
     DeformableCollisionsComponent->EnableSimulation(DeformableSolverComponent);
+
+    BuildTissueSnapshot();
 }
 
-bool IsPointInTetrahedron(const FVector3f& P, const FVector3f& V0, const FVector3f& V1, const FVector3f& V2, const FVector3f& V3)
+bool ATissueBlock::BuildTissueSnapshot()
+{
+    TissueSnapshot.Vertices.Reset();
+    TissueSnapshot.Tetrahedra.Reset();
+
+    if (!FleshComponent)
+    {
+        UE_LOG(LogTemp, Error, TEXT("BuildTissueSnapshot: FleshComponent is null"));
+        return false;
+    }
+
+    // ------------------------------------------------------------
+    // REST
+    // ------------------------------------------------------------
+
+    const UFleshAsset* RestAsset = FleshComponent->GetRestCollection();
+    if (!RestAsset)
+    {
+        UE_LOG(LogTemp, Error, TEXT("BuildTissueSnapshot: RestAsset is null"));
+        return false;
+    }
+
+    const FFleshCollection* RestCollection = RestAsset->GetCollection();
+    if (!RestCollection)
+    {
+        UE_LOG(LogTemp, Error, TEXT("BuildTissueSnapshot: RestCollection is null"));
+        return false;
+    }
+
+    if (!RestCollection->HasAttribute(TEXT("Vertex"), TEXT("Vertices")))
+    {
+        UE_LOG(LogTemp, Error, TEXT("BuildTissueSnapshot: Rest Vertex attribute missing"));
+        return false;
+    }
+
+    if (!RestCollection->HasAttribute(TEXT("Tetrahedron"), TEXT("Tetrahedral")))
+    {
+        UE_LOG(LogTemp, Error, TEXT("BuildTissueSnapshot: Rest Tetrahedron attribute missing"));
+        return false;
+    }
+
+    if (!RestCollection->HasAttribute(TEXT("Mass"), TEXT("Vertices")))
+    {
+        UE_LOG(LogTemp, Error, TEXT("BuildTissueSnapshot: Rest Mass attribute missing"));
+        return false;
+    }
+
+    const TManagedArray<FVector3f>& RestVertices =
+        RestCollection->GetAttribute<FVector3f>(
+            TEXT("Vertex"),
+            TEXT("Vertices"));
+
+    const TManagedArray<FIntVector4>& Tetrahedra =
+        RestCollection->GetAttribute<FIntVector4>(
+            TEXT("Tetrahedron"),
+            TEXT("Tetrahedral"));
+
+    const TManagedArray<float>& Mass =
+        RestCollection->GetAttribute<float>(
+            TEXT("Mass"),
+            TEXT("Vertices"));
+
+    // ------------------------------------------------------------
+    // DYNAMIC
+    // ------------------------------------------------------------
+
+    UFleshDynamicAsset* DynamicAsset =
+        FleshComponent->GetDynamicCollection();
+
+    if (!DynamicAsset)
+    {
+        UE_LOG(LogTemp, Error, TEXT("BuildTissueSnapshot: DynamicAsset is null"));
+        return false;
+    }
+
+    FManagedArrayCollection* DynamicCollection =
+        DynamicAsset->GetCollection();
+
+    if (!DynamicCollection)
+    {
+        UE_LOG(LogTemp, Error, TEXT("BuildTissueSnapshot: DynamicCollection is null"));
+        return false;
+    }
+
+    if (!DynamicCollection->HasAttribute(TEXT("Vertex"), TEXT("Vertices")))
+    {
+        UE_LOG(LogTemp, Error, TEXT("BuildTissueSnapshot: Dynamic Vertex attribute missing"));
+        return false;
+    }
+
+    const TManagedArray<FVector3f>& CurrentVertices =
+        DynamicCollection->GetAttribute<FVector3f>(
+            TEXT("Vertex"),
+            TEXT("Vertices"));
+
+    // ------------------------------------------------------------
+    // IMPORTANT VALIDATION
+    // ------------------------------------------------------------
+
+    if (RestVertices.Num() != CurrentVertices.Num())
+    {
+        UE_LOG(
+            LogTemp,
+            Error,
+            TEXT("BuildTissueSnapshot: Vertex count mismatch! Rest=%d Dynamic=%d"),
+            RestVertices.Num(),
+            CurrentVertices.Num());
+
+        return false;
+    }
+
+    if (RestVertices.Num() != Mass.Num())
+    {
+        UE_LOG(
+            LogTemp,
+            Error,
+            TEXT("BuildTissueSnapshot: Vertex count and Mass count mismatch! Rest=%d Mass=%d"),
+            RestVertices.Num(),
+            Mass.Num());
+
+        return false;
+    }
+
+    // ------------------------------------------------------------
+    // COPY VERTICES
+    // ------------------------------------------------------------
+
+    TissueSnapshot.Vertices.Reserve(RestVertices.Num());
+
+    for (int32 i = 0; i < RestVertices.Num(); ++i)
+    {
+        FTissueVertex& V =
+            TissueSnapshot.Vertices.AddDefaulted_GetRef();
+
+        V.RestPosition = RestVertices[i];
+        V.CurrentPosition = CurrentVertices[i];
+        V.Mass = Mass[i];
+    }
+
+    // ------------------------------------------------------------
+    // COPY TETRAHEDRA
+    // ------------------------------------------------------------
+
+    TissueSnapshot.Tetrahedra.Reserve(Tetrahedra.Num());
+
+    for (int32 i = 0; i < Tetrahedra.Num(); ++i)
+    {
+        FTissueTet& Tet =
+            TissueSnapshot.Tetrahedra.AddDefaulted_GetRef();
+
+        Tet.Vertices = Tetrahedra[i];
+    }
+
+    UE_LOG(
+        LogTemp,
+        Display,
+        TEXT("Tissue snapshot built: Vertices=%d Tetrahedra=%d"),
+        TissueSnapshot.Vertices.Num(),
+        TissueSnapshot.Tetrahedra.Num());
+
+    return true;
+}
+
+void ATissueBlock::UpdateCurrentPositions()
+{
+    UFleshDynamicAsset* DynamicAsset = FleshComponent->GetDynamicCollection();
+    if (!DynamicAsset) return;
+    FManagedArrayCollection* DynamicCollection = DynamicAsset->GetCollection();
+    if (!DynamicCollection) return;
+    if (!DynamicCollection->HasGroup(FName("Vertices")) || !DynamicCollection->HasAttribute(FName("Vertex"), FName("Vertices"))) return;
+
+    const TManagedArray<FVector3f>& CurrentVertices = DynamicCollection->GetAttribute<FVector3f>(TEXT("Vertex"), TEXT("Vertices"));
+
+    if (TissueSnapshot.Vertices.Num() != CurrentVertices.Num())
+    {
+        UE_LOG(
+            LogTemp,
+            Error,
+            TEXT("UpdateCurrentPositions: Vertex count mismatch! Snapshot=%d Dynamic=%d"),
+            TissueSnapshot.Vertices.Num(),
+            CurrentVertices.Num());
+
+        return;
+    }
+
+    for (int32 i = 0; i < CurrentVertices.Num(); ++i)
+    {
+        TissueSnapshot.Vertices[i].CurrentPosition = CurrentVertices[i];
+    }
+}
+
+void ATissueBlock::FindAffectedTetrahedra(const TArray<FVector>& BladePoints, TArray<FCutTetHit>& OutHits)
+{
+
+}
+
+/*bool IsPointInTetrahedron(const FVector3f& P, const FVector3f& V0, const FVector3f& V1, const FVector3f& V2, const FVector3f& V3)
 {
     FVector3f d0 = V1 - V0;
     FVector3f d1 = V2 - V0;
@@ -67,96 +265,11 @@ bool IsPointInTetrahedron(const FVector3f& P, const FVector3f& V0, const FVector
     float Eps = -0.01f;
 
     return (u >= Eps && v >= Eps && w >= Eps && x >= Eps);
-}
+}*/
 
 void ATissueBlock::ApplyCut(const TArray<FVector>& BladePoints)
 {
-    if (!FleshComponent) return;
+    UpdateCurrentPositions();
 
-    const UFleshAsset* RestAsset = Cast<UFleshAsset>(FleshComponent->GetRestCollection());
-    if (!RestAsset) return;
-
-    const FFleshCollection* RestCollPtr = RestAsset->GetCollection();
-    if (!RestCollPtr) return;
-    const FManagedArrayCollection& RestCollection = *RestCollPtr;
-
-    UFleshDynamicAsset* DynAsset = FleshComponent->GetDynamicCollection();
-    if (!DynAsset) return;
-
-    FManagedArrayCollection* DynCollPtr = DynAsset->GetCollection();
-    if (!DynCollPtr) return;
-    FManagedArrayCollection& DynCollection = *DynCollPtr;
-
-    USimulationAsset* SimulationAsset = FleshComponent->GetSimulationCollection();
-    if (!DynAsset) return;
-
-    FManagedArrayCollection* SimCollPtr = SimulationAsset->GetCollection();
-    if (!DynCollPtr) return;
-    FManagedArrayCollection& SimCollection = *SimCollPtr;
-
-    UE_LOG(LogTemp, Warning, TEXT("--- FLESH ASSET(Dynamic) STRUCTURE ---"));
-    for (const FName& GroupName : SimCollection.GroupNames())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Group: %s"), *GroupName.ToString());
-
-        for (const FName& AttrName : SimCollection.AttributeNames(GroupName))
-        {
-            UE_LOG(LogTemp, Warning, TEXT("  -> Attribute: %s"), *AttrName.ToString());
-        }
-    }
-    UE_LOG(LogTemp, Warning, TEXT("-----------------------------"));
-
-    if (!RestCollection.HasGroup(FName("Tetrahedral")) || !DynCollection.HasGroup(FName("Vertices"))) return;
-
-    const TManagedArray<FIntVector4>& Tetrahedrons = RestCollection.GetAttribute<FIntVector4>(FName("Tetrahedron"), FName("Tetrahedral"));
-
-    const TManagedArray<FVector3f>& DynamicVertices = DynCollection.GetAttribute<FVector3f>(FName("Vertex"), FName("Vertices"));
-
-    TManagedArray<float>& Activation = DynCollection.ModifyAttribute<float>(FName("Activation"), FName("Vertices"));
-
-    FTransform FleshTransform = FleshComponent->GetComponentTransform();
-    TArray<FVector3f> LocalBladePoints;
-    for (const FVector& Point : BladePoints)
-    {
-        LocalBladePoints.Add((FVector3f)FleshTransform.InverseTransformPosition(Point));
-    }
-
-    bool bHasCut = false;
-
-    for (int32 i = 0; i < Tetrahedrons.Num(); ++i)
-    {
-        const FIntVector4& TetIndices = Tetrahedrons[i];
-
-        if (Activation[TetIndices.X] == 0.0f && Activation[TetIndices.Y] == 0.0f &&
-            Activation[TetIndices.Z] == 0.0f && Activation[TetIndices.W] == 0.0f)
-        {
-            continue;
-        }
-
-        FVector3f V0 = DynamicVertices[TetIndices.X];
-        FVector3f V1 = DynamicVertices[TetIndices.Y];
-        FVector3f V2 = DynamicVertices[TetIndices.Z];
-        FVector3f V3 = DynamicVertices[TetIndices.W];
-
-        for (const FVector3f& BladePoint : LocalBladePoints)
-        {
-            if (IsPointInTetrahedron(BladePoint, V0, V1, V2, V3))
-            {
-                Activation[TetIndices.X] = 0.0f;
-                Activation[TetIndices.Y] = 0.0f;
-                Activation[TetIndices.Z] = 0.0f;
-                Activation[TetIndices.W] = 0.0f;
-
-                bHasCut = true;
-                break;
-            }
-        }
-    }
-
-    if (bHasCut)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("РАЗРЕЗ ВЫПОЛНЕН: Изменены флаги Activation в DynamicCollection!"));
-
-        FleshComponent->MarkRenderStateDirty();
-    }
+    UE_LOG(LogTemp, Display, TEXT("Applying Cut!"));
 }
