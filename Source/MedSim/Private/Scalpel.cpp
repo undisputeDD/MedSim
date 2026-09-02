@@ -80,25 +80,25 @@ void AScalpel::PerformCutTrace()
 
 	if (HitTissueThisFrame)
 	{
-		if (!bIsCutting || CurrentTissue != HitTissueThisFrame)
+		if (CurrentTissue != HitTissueThisFrame)
 		{
 			CurrentTissue = HitTissueThisFrame;
-			bIsCutting = true;
 			UE_LOG(LogTemp, Warning, TEXT("Inside TissueBlock!"));
 		}
 
-		if (bIsCutting && CurrentTissue)
+		if (CurrentTissue && bHasPreviousBladePoints)
 		{
-			CurrentTissue->ApplyCut(CurrentBladePoints);
+			CurrentTissue->ApplyCut(PreviousBladePoints, CurrentBladePoints);
 		}
+
+		PreviousBladePoints = CurrentBladePoints;
+		bHasPreviousBladePoints = true;
 	}
 	else
 	{
-		if (bIsCutting)
-		{
-			bIsCutting = false;
-			CurrentTissue = nullptr;
-			UE_LOG(LogTemp, Warning, TEXT("Outside TissueBlock!"));
-		}
+		CurrentTissue = nullptr;
+		bHasPreviousBladePoints = false;
+		PreviousBladePoints.Reset();
+		UE_LOG(LogTemp, Warning, TEXT("Outside TissueBlock!"));
 	}
 }

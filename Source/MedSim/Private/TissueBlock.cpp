@@ -270,15 +270,328 @@ void ATissueBlock::UpdateCurrentPositions()
     }
 }
 
-void ATissueBlock::FindAffectedTetrahedra(const TArray<FVector>& BladePoints, TArray<FCutTetHit>& OutHits)
+// Möller–Trumbore Algorithm
+static bool SegmentIntersectsTriangle(
+    const FVector3f& SegmentStart,
+    const FVector3f& SegmentEnd,
+    const FVector3f& A,
+    const FVector3f& B,
+    const FVector3f& C,
+    FVector3f& OutIntersection,
+    float& OutT)
 {
+    constexpr float Epsilon = 1e-6f;
 
+    const FVector3f Direction = SegmentEnd - SegmentStart;
+    const FVector3f Edge1 = B - A;
+    const FVector3f Edge2 = C - A;
+
+    const FVector3f PVec = FVector3f::CrossProduct(Direction, Edge2);
+
+    const float Det = FVector3f::DotProduct(Edge1, PVec);
+
+    if (FMath::Abs(Det) < Epsilon)
+    {
+        return false;
+    }
+
+    const float InvDet = 1.0f / Det;
+
+    const FVector3f TVec = SegmentStart - A;
+
+    const float U = FVector3f::DotProduct(TVec, PVec) * InvDet;
+
+    if (U < -Epsilon || U > 1.0f + Epsilon)
+    {
+        return false;
+    }
+
+    const FVector3f QVec = FVector3f::CrossProduct(TVec, Edge1);
+
+    const float V = FVector3f::DotProduct(Direction, QVec) * InvDet;
+
+    if (V < -Epsilon ||
+        U + V > 1.0f + Epsilon)
+    {
+        return false;
+    }
+
+    const float T = FVector3f::DotProduct(Edge2, QVec) * InvDet;
+
+    if (T < -Epsilon || T > 1.0f + Epsilon)
+    {
+        return false;
+    }
+
+    OutT = FMath::Clamp(T, 0.0f, 1.0f);
+
+    OutIntersection = SegmentStart + Direction * OutT;
+
+    return true;
 }
 
-void ATissueBlock::ApplyCut(const TArray<FVector>& BladePoints)
+// Barycentric coords
+static bool IsPointInTetrahedron(
+    const FVector3f& P,
+    const FVector3f& V0,
+    const FVector3f& V1,
+    const FVector3f& V2,
+    const FVector3f& V3)
+{
+    const FVector3f D0 = V1 - V0;
+    const FVector3f D1 = V2 - V0;
+    const FVector3f D2 = V3 - V0;
+    const FVector3f DP = P - V0;
+
+    const float Det = FVector3f::DotProduct(D0, FVector3f::CrossProduct(D1, D2));
+
+    constexpr float Epsilon = 1e-6f;
+
+    if (FMath::Abs(Det) < Epsilon)
+    {
+        return false;
+    }
+
+    const float InvDet = 1.0f / Det;
+
+    const float U = FVector3f::DotProduct(DP, FVector3f::CrossProduct(D1, D2)) * InvDet;
+
+    const float V = FVector3f::DotProduct(D0, FVector3f::CrossProduct(DP, D2)) * InvDet;
+
+    const float W = FVector3f::DotProduct(D0, FVector3f::CrossProduct(D1, DP)) * InvDet;
+
+    const float X = 1.0f - U - V - W;
+
+    const float Tolerance = 1e-4f;
+
+    return U >= -Tolerance && V >= -Tolerance && W >= -Tolerance && X >= -Tolerance;
+}
+
+static bool SegmentIntersectsTetrahedron(
+    const FVector3f& SegmentStart,
+    const FVector3f& SegmentEnd,
+    const FVector3f& V0,
+    const FVector3f& V1,
+    const FVector3f& V2,
+    const FVector3f& V3,
+    TArray<FVector3f>& OutIntersections)
+{
+    OutIntersections.Reset();
+
+    // ------------------------------------------------------------
+    // 1. Start / end inside
+    // ------------------------------------------------------------
+
+    if (IsPointInTetrahedron(SegmentStart, V0, V1, V2, V3))
+    {
+        OutIntersections.Add(SegmentStart);
+    }
+
+    if (IsPointInTetrahedron(SegmentEnd, V0, V1, V2, V3))
+    {
+        OutIntersections.Add(SegmentEnd);
+    }
+
+    // ------------------------------------------------------------
+    // 2. Segment vs 4 tetrahedron faces
+    // ------------------------------------------------------------
+
+    struct FTriangle
+    {
+        FVector3f A;
+        FVector3f B;
+        FVector3f C;
+    };
+
+    const FTriangle Faces[4] =
+    {
+        { V0, V1, V2 },
+        { V0, V1, V3 },
+        { V0, V2, V3 },
+        { V1, V2, V3 }
+    };
+
+    for (const FTriangle& Face : Faces)
+    {
+        FVector3f Intersection;
+        float T = 0.0f;
+
+        if (SegmentIntersectsTriangle(
+            SegmentStart,
+            SegmentEnd,
+            Face.A,
+            Face.B,
+            Face.C,
+            Intersection,
+            T))
+        {
+            bool bAlreadyExists = false;
+
+            for (const FVector3f& Existing : OutIntersections)
+            {
+                if (Existing.Equals(Intersection, 0.01f))
+                {
+                    bAlreadyExists = true;
+                    break;
+                }
+            }
+
+            if (!bAlreadyExists)
+            {
+                OutIntersections.Add(Intersection);
+            }
+        }
+    }
+
+    return OutIntersections.Num() > 0;
+}
+
+void ATissueBlock::FindAffectedTetrahedra(const TArray<FVector>& PreviousBladePoints, const TArray<FVector>& CurrentBladePoints, TArray<FCutTetHit>& OutHits)
+{
+    OutHits.Reset();
+
+    if (!FleshComponent)
+        return;
+
+    if (PreviousBladePoints.Num() != CurrentBladePoints.Num())
+    {
+        UE_LOG(
+            LogTemp,
+            Warning,
+            TEXT("Blade sample count mismatch: Previous=%d Current=%d"),
+            PreviousBladePoints.Num(),
+            CurrentBladePoints.Num());
+
+        return;
+    }
+
+    if (PreviousBladePoints.Num() == 0) // No segment to create: do nothing
+        return;
+
+    const FTransform TissueTransform = FleshComponent->GetComponentTransform();
+
+    // ------------------------------------------------------------
+    // World -> Flesh local
+    // ------------------------------------------------------------
+
+    TArray<FVector3f> PreviousLocalPoints;
+    TArray<FVector3f> CurrentLocalPoints;
+
+    PreviousLocalPoints.Reserve(PreviousBladePoints.Num());
+    CurrentLocalPoints.Reserve(CurrentBladePoints.Num());
+
+    for (int32 i = 0; i < PreviousBladePoints.Num(); ++i)
+    {
+        PreviousLocalPoints.Add(FVector3f(TissueTransform.InverseTransformPosition(PreviousBladePoints[i])));
+        CurrentLocalPoints.Add(FVector3f(TissueTransform.InverseTransformPosition(CurrentBladePoints[i])));
+    }
+
+    // ------------------------------------------------------------
+    // Blade sample trajectories
+    // ------------------------------------------------------------
+
+    for (int32 BladeIndex = 0; BladeIndex < PreviousLocalPoints.Num(); ++BladeIndex)
+    {
+        const FVector3f SegmentStart = PreviousLocalPoints[BladeIndex];
+        const FVector3f SegmentEnd = CurrentLocalPoints[BladeIndex];
+
+        // Skip static sample point
+        if (SegmentStart.Equals(SegmentEnd, 0.001f))
+        {
+            continue;
+        }
+
+        // --------------------------------------------------------
+        // Test against every tetrahedron
+        // --------------------------------------------------------
+
+        for (int32 TetId = 0; TetId < TissueSnapshot.Tetrahedra.Num(); ++TetId)
+        {
+            const FTissueTet& Tet = TissueSnapshot.Tetrahedra[TetId];
+
+            const FVector3f& V0 = TissueSnapshot.Vertices[Tet.Vertices.X].CurrentPosition;
+            const FVector3f& V1 =TissueSnapshot.Vertices[Tet.Vertices.Y].CurrentPosition;
+            const FVector3f& V2 =TissueSnapshot.Vertices[Tet.Vertices.Z].CurrentPosition;
+            const FVector3f& V3 =TissueSnapshot.Vertices[Tet.Vertices.W].CurrentPosition;
+
+            TArray<FVector3f> Intersections;
+
+            if (!SegmentIntersectsTetrahedron(
+                SegmentStart,
+                SegmentEnd,
+                V0, V1, V2, V3,
+                Intersections))
+            {
+                continue;
+            }
+
+            // ----------------------------------------------------
+            // Find existing hit for this Tet
+            // ----------------------------------------------------
+
+            FCutTetHit* Hit = nullptr;
+            for (FCutTetHit& ExistingHit : OutHits)
+            {
+                if (ExistingHit.TetId == TetId)
+                {
+                    Hit = &ExistingHit;
+                    break;
+                }
+            }
+
+            if (!Hit)
+            {
+                FCutTetHit NewHit;
+                NewHit.TetId = TetId;
+
+                for (const FVector3f& Point : Intersections)
+                {
+                    NewHit.IntersectionPoints.Add(Point);
+                }
+
+                OutHits.Add(MoveTemp(NewHit));
+            }
+            else
+            {
+                for (const FVector3f& Point : Intersections)
+                {
+                    bool bExists = false;
+
+                    for (const FVector3f& ExistingPoint : Hit->IntersectionPoints)
+                    {
+                        if (ExistingPoint.Equals(Point, 0.01f))
+                        {
+                            bExists = true;
+                            break;
+                        }
+                    }
+
+                    if (!bExists)
+                    {
+                        Hit->IntersectionPoints.Add(Point);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TArray<FVector>& CurrentBladePoints)
 {
     UpdateCurrentPositions();
 
     TArray<FCutTetHit> OutHits;
-    FindAffectedTetrahedra(BladePoints, OutHits);
+    FindAffectedTetrahedra(PreviousBladePoints, CurrentBladePoints, OutHits);
+
+    UE_LOG(LogTemp, Display, TEXT("Affected tetrahedra: %d"), OutHits.Num());
+
+    for (const FCutTetHit& Hit : OutHits)
+    {
+        UE_LOG(
+            LogTemp,
+            Display,
+            TEXT("Tet %d, intersections=%d"),
+            Hit.TetId,
+            Hit.IntersectionPoints.Num());
+    }
 }

@@ -57,7 +57,7 @@ class MEDSIM_API ATissueBlock : public AActor
 public:	
 	ATissueBlock();
 
-	void ApplyCut(const TArray<FVector>& BladePoints);
+	void ApplyCut(const TArray<FVector>& PreviousBladePoints, const TArray<FVector>& CurrentBladePoints);
 
 protected:
 	virtual void BeginPlay() override;
@@ -66,7 +66,7 @@ private:
 	bool BuildTissueSnapshot();
 	void UpdateCurrentPositions();
 
-	void FindAffectedTetrahedra(const TArray<FVector>& BladePoints, TArray<FCutTetHit>& OutHits);
+	void FindAffectedTetrahedra(const TArray<FVector>& PreviousBladePoints, const TArray<FVector>& CurrentBladePoints, TArray<FCutTetHit>& OutHits);
 
 public:
 

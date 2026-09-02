@@ -23,8 +23,6 @@ private:
 	void PerformCutTrace();
 
 protected:
-	bool bIsCutting = false;
-
 	UPROPERTY()
 	ATissueBlock* CurrentTissue;
 
@@ -33,4 +31,8 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MedSim|Instrument")
 	USplineComponent* BladeEdgeSpline;
+
+private:
+	TArray<FVector> PreviousBladePoints;
+	bool bHasPreviousBladePoints = false;
 };
