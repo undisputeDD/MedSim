@@ -114,8 +114,7 @@ bool ATissueBlock::BuildTissueSnapshot()
     // DYNAMIC
     // ------------------------------------------------------------
 
-    UFleshDynamicAsset* DynamicAsset =
-        FleshComponent->GetDynamicCollection();
+    UFleshDynamicAsset* DynamicAsset = FleshComponent->GetDynamicCollection();
 
     if (!DynamicAsset)
     {
@@ -123,8 +122,7 @@ bool ATissueBlock::BuildTissueSnapshot()
         return false;
     }
 
-    FManagedArrayCollection* DynamicCollection =
-        DynamicAsset->GetCollection();
+    FManagedArrayCollection* DynamicCollection = DynamicAsset->GetCollection();
 
     if (!DynamicCollection)
     {
@@ -179,8 +177,7 @@ bool ATissueBlock::BuildTissueSnapshot()
 
     for (int32 i = 0; i < RestVertices.Num(); ++i)
     {
-        FTissueVertex& V =
-            TissueSnapshot.Vertices.AddDefaulted_GetRef();
+        FTissueVertex& V = TissueSnapshot.Vertices.AddDefaulted_GetRef();
 
         V.RestPosition = RestVertices[i];
         V.CurrentPosition = CurrentVertices[i];
@@ -193,12 +190,34 @@ bool ATissueBlock::BuildTissueSnapshot()
 
     TissueSnapshot.Tetrahedra.Reserve(Tetrahedra.Num());
 
+    auto IsValidVertexIndex = [NumVertices = RestVertices.Num()](int32 Index)
+        {
+            return Index >= 0 && Index < NumVertices;
+        };
+
     for (int32 i = 0; i < Tetrahedra.Num(); ++i)
     {
-        FTissueTet& Tet =
-            TissueSnapshot.Tetrahedra.AddDefaulted_GetRef();
+        FTissueTet& Tet = TissueSnapshot.Tetrahedra.AddDefaulted_GetRef();
 
         Tet.Vertices = Tetrahedra[i];
+
+        const FIntVector4& TetVec = Tetrahedra[i];
+
+        if (!IsValidVertexIndex(TetVec.X) ||
+            !IsValidVertexIndex(TetVec.Y) ||
+            !IsValidVertexIndex(TetVec.Z) ||
+            !IsValidVertexIndex(TetVec.W))
+        {
+            UE_LOG(
+                LogTemp,
+                Error,
+                TEXT("Invalid tetrahedron %d: (%d,%d,%d,%d)"),
+                i,
+                TetVec.X, TetVec.Y, TetVec.Z, TetVec.W);
+
+            TissueSnapshot.Tetrahedra.Reset();
+            return false;
+        }
     }
 
     UE_LOG(
@@ -214,10 +233,22 @@ bool ATissueBlock::BuildTissueSnapshot()
 void ATissueBlock::UpdateCurrentPositions()
 {
     UFleshDynamicAsset* DynamicAsset = FleshComponent->GetDynamicCollection();
-    if (!DynamicAsset) return;
+    if (!DynamicAsset)
+    {
+        UE_LOG(LogTemp, Error, TEXT("UpdateCurrentPositions: DynamicAsset is null"));
+        return;
+    }
     FManagedArrayCollection* DynamicCollection = DynamicAsset->GetCollection();
-    if (!DynamicCollection) return;
-    if (!DynamicCollection->HasGroup(FName("Vertices")) || !DynamicCollection->HasAttribute(FName("Vertex"), FName("Vertices"))) return;
+    if (!DynamicCollection)
+    {
+        UE_LOG(LogTemp, Error, TEXT("UpdateCurrentPositions: DynamicCollection is null"));
+        return;
+    }
+    if (!DynamicCollection->HasGroup(FName("Vertices")) || !DynamicCollection->HasAttribute(FName("Vertex"), FName("Vertices")))
+    {
+        UE_LOG(LogTemp, Error, TEXT("UpdateCurrentPositions: Dynamic Vertex attribute missing"));
+        return;
+    }
 
     const TManagedArray<FVector3f>& CurrentVertices = DynamicCollection->GetAttribute<FVector3f>(TEXT("Vertex"), TEXT("Vertices"));
 
@@ -244,32 +275,10 @@ void ATissueBlock::FindAffectedTetrahedra(const TArray<FVector>& BladePoints, TA
 
 }
 
-/*bool IsPointInTetrahedron(const FVector3f& P, const FVector3f& V0, const FVector3f& V1, const FVector3f& V2, const FVector3f& V3)
-{
-    FVector3f d0 = V1 - V0;
-    FVector3f d1 = V2 - V0;
-    FVector3f d2 = V3 - V0;
-    FVector3f dP = P - V0;
-
-    float Det = FVector3f::DotProduct(d0, FVector3f::CrossProduct(d1, d2));
-
-    if (FMath::Abs(Det) < UE_KINDA_SMALL_NUMBER) return false;
-
-    float InvDet = 1.0f / Det;
-
-    float u = FVector3f::DotProduct(dP, FVector3f::CrossProduct(d1, d2)) * InvDet;
-    float v = FVector3f::DotProduct(d0, FVector3f::CrossProduct(dP, d2)) * InvDet;
-    float w = FVector3f::DotProduct(d0, FVector3f::CrossProduct(d1, dP)) * InvDet;
-    float x = 1.0f - u - v - w;
-
-    float Eps = -0.01f;
-
-    return (u >= Eps && v >= Eps && w >= Eps && x >= Eps);
-}*/
-
 void ATissueBlock::ApplyCut(const TArray<FVector>& BladePoints)
 {
     UpdateCurrentPositions();
 
-    UE_LOG(LogTemp, Display, TEXT("Applying Cut!"));
+    TArray<FCutTetHit> OutHits;
+    FindAffectedTetrahedra(BladePoints, OutHits);
 }
