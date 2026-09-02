@@ -32,6 +32,12 @@ void AScalpel::Tick(float DeltaTime)
     {
         PerformCutTrace();
     }
+	else
+	{
+		CurrentTissue = nullptr;
+		PreviousBladePoints.Reset();
+		bHasPreviousBladePoints = false;
+	}
 }
 
 void AScalpel::PerformCutTrace()
@@ -40,18 +46,15 @@ void AScalpel::PerformCutTrace()
 
 	float BladeLengthCM = BladeEdgeSpline->GetSplineLength();
 	float ScanResolutionCM = 0.2f;
-	int32 NumSamples = FMath::Max(2, FMath::CeilToInt(BladeLengthCM / ScanResolutionCM));
 
 	TArray<FVector> CurrentBladePoints;
-	ATissueBlock* HitTissueThisFrame = nullptr;
-
-	for (int32 i = 0; i < NumSamples; ++i)
+	for (float Distance = 0.0f; Distance < BladeLengthCM; Distance += ScanResolutionCM)
 	{
-		float DistanceAlongSpline = (float)i * ScanResolutionCM;
-		FVector SamplePoint = BladeEdgeSpline->GetLocationAtDistanceAlongSpline(DistanceAlongSpline, ESplineCoordinateSpace::World);
-		CurrentBladePoints.Add(SamplePoint);
+		CurrentBladePoints.Add(BladeEdgeSpline->GetLocationAtDistanceAlongSpline(Distance, ESplineCoordinateSpace::World));
 	}
+	CurrentBladePoints.Add(BladeEdgeSpline->GetLocationAtDistanceAlongSpline(BladeLengthCM, ESplineCoordinateSpace::World));
 
+	ATissueBlock* HitTissueThisFrame = nullptr;
 	for (AActor* TissueActor : FoundTissues)
 	{
 		ATissueBlock* TissueBlock = Cast<ATissueBlock>(TissueActor);

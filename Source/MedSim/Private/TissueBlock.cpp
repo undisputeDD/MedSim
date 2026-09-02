@@ -278,7 +278,8 @@ static bool SegmentIntersectsTriangle(
     const FVector3f& B,
     const FVector3f& C,
     FVector3f& OutIntersection,
-    float& OutT)
+    float& OutT,
+    FVector3f& OutNormal)
 {
     constexpr float Epsilon = 1e-6f;
 
@@ -323,9 +324,12 @@ static bool SegmentIntersectsTriangle(
         return false;
     }
 
+    // Point place along trajectory
     OutT = FMath::Clamp(T, 0.0f, 1.0f);
 
     OutIntersection = SegmentStart + Direction * OutT;
+
+    OutNormal = FVector3f::CrossProduct(Edge1, Edge2).GetSafeNormal();
 
     return true;
 }
@@ -370,27 +374,21 @@ static bool IsPointInTetrahedron(
 static bool SegmentIntersectsTetrahedron(
     const FVector3f& SegmentStart,
     const FVector3f& SegmentEnd,
+    int32 BladeSampleIndex,
     const FVector3f& V0,
     const FVector3f& V1,
     const FVector3f& V2,
     const FVector3f& V3,
-    TArray<FVector3f>& OutIntersections)
+    TArray<FCutIntersection>& OutCutIntersections)
 {
-    OutIntersections.Reset();
+    OutCutIntersections.Reset();
 
     // ------------------------------------------------------------
     // 1. Start / end inside
     // ------------------------------------------------------------
 
-    if (IsPointInTetrahedron(SegmentStart, V0, V1, V2, V3))
-    {
-        OutIntersections.Add(SegmentStart);
-    }
-
-    if (IsPointInTetrahedron(SegmentEnd, V0, V1, V2, V3))
-    {
-        OutIntersections.Add(SegmentEnd);
-    }
+    const bool bStartInside = IsPointInTetrahedron(SegmentStart, V0, V1, V2, V3);
+    const bool bEndInside = IsPointInTetrahedron(SegmentEnd, V0, V1, V2, V3);
 
     // ------------------------------------------------------------
     // 2. Segment vs 4 tetrahedron faces
@@ -401,54 +399,88 @@ static bool SegmentIntersectsTetrahedron(
         FVector3f A;
         FVector3f B;
         FVector3f C;
+        FVector3f OppositeVertex;
+        int32 FaceIndex;
     };
 
     const FTriangle Faces[4] =
     {
-        { V0, V1, V2 },
-        { V0, V1, V3 },
-        { V0, V2, V3 },
-        { V1, V2, V3 }
+        { V0, V1, V2, V3, 0 },
+        { V0, V1, V3, V2, 1 },
+        { V0, V2, V3, V1, 2 },
+        { V1, V2, V3, V0, 3 }
     };
 
     for (const FTriangle& Face : Faces)
     {
         FVector3f Intersection;
+        FVector3f FaceNormal;
         float T = 0.0f;
 
-        if (SegmentIntersectsTriangle(
+        if (!SegmentIntersectsTriangle(
             SegmentStart,
             SegmentEnd,
             Face.A,
             Face.B,
             Face.C,
             Intersection,
-            T))
+            T,
+            FaceNormal))
         {
-            bool bAlreadyExists = false;
+            continue;
+        }
 
-            for (const FVector3f& Existing : OutIntersections)
-            {
-                if (Existing.Equals(Intersection, 0.01f))
-                {
-                    bAlreadyExists = true;
-                    break;
-                }
-            }
+        // --------------------------------------------------------
+        // Make normal point OUT of tetrahedron
+        // --------------------------------------------------------
 
-            if (!bAlreadyExists)
+        const FVector3f ToOppositeVertex = Face.OppositeVertex - Intersection;
+
+        if (FVector3f::DotProduct(FaceNormal, ToOppositeVertex) > 0.0f)
+        {
+            FaceNormal *= -1.0f;
+        }
+
+        // --------------------------------------------------------
+        // Avoid duplicate point when intersection lies
+        // exactly on edge / vertex shared by two faces
+        // --------------------------------------------------------
+
+        bool bAlreadyExists = false;
+
+        for (const FCutIntersection& ExistingIntersection : OutCutIntersections)
+        {
+            if (ExistingIntersection.Point.Equals(Intersection, 0.01f))
             {
-                OutIntersections.Add(Intersection);
+                bAlreadyExists = true;
+                break;
             }
         }
+
+        if (bAlreadyExists)
+        {
+            continue;
+        }
+
+        // --------------------------------------------------------
+        // Store complete intersection event
+        // --------------------------------------------------------
+
+        FCutIntersection& NewIntersection = OutCutIntersections.AddDefaulted_GetRef();
+
+        NewIntersection.Point = Intersection;
+        NewIntersection.BladeSampleIndex = BladeSampleIndex;
+        NewIntersection.SegmentT = T;
+        NewIntersection.TetFaceIndex = Face.FaceIndex;
+        NewIntersection.Normal = FaceNormal;
     }
 
-    return OutIntersections.Num() > 0;
+    return bStartInside || bEndInside || OutCutIntersections.Num() > 0;
 }
 
-void ATissueBlock::FindAffectedTetrahedra(const TArray<FVector>& PreviousBladePoints, const TArray<FVector>& CurrentBladePoints, TArray<FCutTetHit>& OutHits)
+void ATissueBlock::FindAffectedTetrahedra(const TArray<FVector>& PreviousBladePoints, const TArray<FVector>& CurrentBladePoints, TArray<FCutTetHit>& OutAffectedTets)
 {
-    OutHits.Reset();
+    OutAffectedTets.Reset();
 
     if (!FleshComponent)
         return;
@@ -468,11 +500,16 @@ void ATissueBlock::FindAffectedTetrahedra(const TArray<FVector>& PreviousBladePo
     if (PreviousBladePoints.Num() == 0) // No segment to create: do nothing
         return;
 
-    const FTransform TissueTransform = FleshComponent->GetComponentTransform();
+    if (TissueSnapshot.Vertices.Num() == 0 || TissueSnapshot.Tetrahedra.Num() == 0)
+    {
+        return;
+    }
 
     // ------------------------------------------------------------
     // World -> Flesh local
     // ------------------------------------------------------------
+
+    const FTransform TissueTransform = FleshComponent->GetComponentTransform();
 
     TArray<FVector3f> PreviousLocalPoints;
     TArray<FVector3f> CurrentLocalPoints;
@@ -487,6 +524,19 @@ void ATissueBlock::FindAffectedTetrahedra(const TArray<FVector>& PreviousBladePo
     }
 
     // ------------------------------------------------------------
+    // Map:
+    // TetId -> index inside OutAffectedTets
+    //
+    // This allows us to visit a Tet multiple times from
+    // different blade trajectories but still keep ONE FCutTetHit.
+    // ------------------------------------------------------------
+
+    TMap<int32, int32> TetIdToHitIndex;
+
+    // Optional but useful
+    OutAffectedTets.Reserve(FMath::Min(TissueSnapshot.Tetrahedra.Num(), 64));
+
+    // ------------------------------------------------------------
     // Blade sample trajectories
     // ------------------------------------------------------------
 
@@ -495,7 +545,7 @@ void ATissueBlock::FindAffectedTetrahedra(const TArray<FVector>& PreviousBladePo
         const FVector3f SegmentStart = PreviousLocalPoints[BladeIndex];
         const FVector3f SegmentEnd = CurrentLocalPoints[BladeIndex];
 
-        // Skip static sample point
+        // No movement -> no trajectory
         if (SegmentStart.Equals(SegmentEnd, 0.001f))
         {
             continue;
@@ -510,67 +560,53 @@ void ATissueBlock::FindAffectedTetrahedra(const TArray<FVector>& PreviousBladePo
             const FTissueTet& Tet = TissueSnapshot.Tetrahedra[TetId];
 
             const FVector3f& V0 = TissueSnapshot.Vertices[Tet.Vertices.X].CurrentPosition;
-            const FVector3f& V1 =TissueSnapshot.Vertices[Tet.Vertices.Y].CurrentPosition;
-            const FVector3f& V2 =TissueSnapshot.Vertices[Tet.Vertices.Z].CurrentPosition;
-            const FVector3f& V3 =TissueSnapshot.Vertices[Tet.Vertices.W].CurrentPosition;
+            const FVector3f& V1 = TissueSnapshot.Vertices[Tet.Vertices.Y].CurrentPosition;
+            const FVector3f& V2 = TissueSnapshot.Vertices[Tet.Vertices.Z].CurrentPosition;
+            const FVector3f& V3 = TissueSnapshot.Vertices[Tet.Vertices.W].CurrentPosition;
 
-            TArray<FVector3f> Intersections;
+            TArray<FCutIntersection> OutIntersections;
 
-            if (!SegmentIntersectsTetrahedron(
-                SegmentStart,
-                SegmentEnd,
-                V0, V1, V2, V3,
-                Intersections))
+            const bool bAffected = SegmentIntersectsTetrahedron(SegmentStart,
+                                                                SegmentEnd,
+                                                                BladeIndex,
+                                                                V0,
+                                                                V1,
+                                                                V2,
+                                                                V3,
+                                                                OutIntersections);
+            if (!bAffected)
             {
                 continue;
             }
 
             // ----------------------------------------------------
-            // Find existing hit for this Tet
+            // Get existing FCutTetHit or create a new one
             // ----------------------------------------------------
 
-            FCutTetHit* Hit = nullptr;
-            for (FCutTetHit& ExistingHit : OutHits)
+            int32* ExistingHitIndex = TetIdToHitIndex.Find(TetId);
+            if (!ExistingHitIndex)
             {
-                if (ExistingHit.TetId == TetId)
-                {
-                    Hit = &ExistingHit;
-                    break;
-                }
-            }
+                const int32 NewHitIndex = OutAffectedTets.AddDefaulted();
 
-            if (!Hit)
-            {
-                FCutTetHit NewHit;
+                FCutTetHit& NewHit = OutAffectedTets[NewHitIndex];
+
                 NewHit.TetId = TetId;
 
-                for (const FVector3f& Point : Intersections)
-                {
-                    NewHit.IntersectionPoints.Add(Point);
-                }
+                TetIdToHitIndex.Add(TetId, NewHitIndex);
 
-                OutHits.Add(MoveTemp(NewHit));
+                *ExistingHitIndex = NewHitIndex;
             }
-            else
+
+            FCutTetHit& TetHit = OutAffectedTets[*ExistingHitIndex];
+
+            // ----------------------------------------------------
+            // Add all exact intersection events found for this
+            // blade trajectory
+            // ----------------------------------------------------
+
+            for (const FCutIntersection& Intersection : OutIntersections)
             {
-                for (const FVector3f& Point : Intersections)
-                {
-                    bool bExists = false;
-
-                    for (const FVector3f& ExistingPoint : Hit->IntersectionPoints)
-                    {
-                        if (ExistingPoint.Equals(Point, 0.01f))
-                        {
-                            bExists = true;
-                            break;
-                        }
-                    }
-
-                    if (!bExists)
-                    {
-                        Hit->IntersectionPoints.Add(Point);
-                    }
-                }
+                TetHit.Intersections.Add(Intersection);
             }
         }
     }
@@ -590,8 +626,28 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
         UE_LOG(
             LogTemp,
             Display,
-            TEXT("Tet %d, intersections=%d"),
+            TEXT("Tet %d, Intersections=%d"),
             Hit.TetId,
-            Hit.IntersectionPoints.Num());
+            Hit.Intersections.Num());
+
+        for (const FCutIntersection& Intersection : Hit.Intersections)
+        {
+            UE_LOG(
+                LogTemp,
+                Display,
+                TEXT(
+                    "  Blade=%d T=%.3f Face=%d "
+                    "Point=(%.2f %.2f %.2f) "
+                    "Normal=(%.2f %.2f %.2f)"),
+                Intersection.BladeSampleIndex,
+                Intersection.SegmentT,
+                Intersection.TetFaceIndex,
+                Intersection.Point.X,
+                Intersection.Point.Y,
+                Intersection.Point.Z,
+                Intersection.Normal.X,
+                Intersection.Normal.Y,
+                Intersection.Normal.Z);
+        }
     }
 }
