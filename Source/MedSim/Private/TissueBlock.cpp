@@ -95,20 +95,11 @@ bool ATissueBlock::BuildTissueSnapshot()
         return false;
     }
 
-    const TManagedArray<FVector3f>& RestVertices =
-        RestCollection->GetAttribute<FVector3f>(
-            TEXT("Vertex"),
-            TEXT("Vertices"));
+    const TManagedArray<FVector3f>& RestVertices = RestCollection->GetAttribute<FVector3f>(TEXT("Vertex"), TEXT("Vertices"));
 
-    const TManagedArray<FIntVector4>& Tetrahedra =
-        RestCollection->GetAttribute<FIntVector4>(
-            TEXT("Tetrahedron"),
-            TEXT("Tetrahedral"));
+    const TManagedArray<FIntVector4>& Tetrahedra = RestCollection->GetAttribute<FIntVector4>(TEXT("Tetrahedron"), TEXT("Tetrahedral"));
 
-    const TManagedArray<float>& Mass =
-        RestCollection->GetAttribute<float>(
-            TEXT("Mass"),
-            TEXT("Vertices"));
+    const TManagedArray<float>& Mass = RestCollection->GetAttribute<float>(TEXT("Mass"), TEXT("Vertices"));
 
     // ------------------------------------------------------------
     // DYNAMIC
