@@ -2,7 +2,7 @@
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "PhysicsEngine/PhysicsHandleComponent.h"
-#include "MedicalInstrument.h"
+#include "Instruments/MedicalInstrument.h"
 
 const float HAND_OFFSET = 30.f;
 const float GRAB_DEPTH = 10.f;

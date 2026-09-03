@@ -3,7 +3,7 @@
 namespace TissueIntersection
 {
     // Möller–Trumbore Algorithm
-    static bool SegmentIntersectsTriangle(
+    bool SegmentIntersectsTriangle(
         const FVector3f& SegmentStart,
         const FVector3f& SegmentEnd,
         const FVector3f& A,
@@ -67,7 +67,7 @@ namespace TissueIntersection
     }
 
     // Barycentric coords
-    static bool IsPointInTetrahedron(
+    bool IsPointInTetrahedron(
         const FVector3f& P,
         const FVector3f& V0,
         const FVector3f& V1,
@@ -103,7 +103,7 @@ namespace TissueIntersection
         return U >= -Tolerance && V >= -Tolerance && W >= -Tolerance && X >= -Tolerance;
     }
 
-    static bool SegmentIntersectsTetrahedron(
+    bool SegmentIntersectsTetrahedron(
         const FVector3f& SegmentStart,
         const FVector3f& SegmentEnd,
         int32 BladeSampleIndex,
