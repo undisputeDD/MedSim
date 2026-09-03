@@ -1,5 +1,6 @@
 #include "Tissue/TissueBlock.h"
 #include "Tissue/Geometry/TissueIntersection.h"
+#include "Tissue/Geometry/CutPath.h"
 
 #include "ChaosFlesh/FleshComponent.h"
 #include "ChaosFlesh/ChaosDeformableSolverComponent.h"
@@ -405,33 +406,27 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
 
     UE_LOG(LogTemp, Display, TEXT("Affected tetrahedra: %d"), OutHits.Num());
 
-    for (const FCutTetHit& Hit : OutHits)
+    TArray<FCutPathPoint> OutCutPathPoints;
+    CutPath::BuildOrderedCutPoints(OutHits, OutCutPathPoints);
+
+    for (const FCutPathPoint CutPathPoint : OutCutPathPoints)
     {
         UE_LOG(
             LogTemp,
             Display,
-            TEXT("Tet %d, Intersections=%d"),
-            Hit.TetId,
-            Hit.Intersections.Num());
-
-        for (const FCutIntersection& Intersection : Hit.Intersections)
-        {
-            UE_LOG(
-                LogTemp,
-                Display,
-                TEXT(
-                    "  Blade=%d T=%.3f Face=%d "
-                    "Point=(%.2f %.2f %.2f) "
-                    "Normal=(%.2f %.2f %.2f)"),
-                Intersection.BladeSampleIndex,
-                Intersection.SegmentT,
-                Intersection.TetFaceIndex,
-                Intersection.Point.X,
-                Intersection.Point.Y,
-                Intersection.Point.Z,
-                Intersection.Normal.X,
-                Intersection.Normal.Y,
-                Intersection.Normal.Z);
-        }
+            TEXT(
+                "  TetId=%d "
+                "Blade=%d T=%.3f "
+                "Point=(%.2f %.2f %.2f) "
+                "Normal=(%.2f %.2f %.2f)"),
+            CutPathPoint.TetId,
+            CutPathPoint.BladeSampleIndex,
+            CutPathPoint.SegmentT,
+            CutPathPoint.Point.X,
+            CutPathPoint.Point.Y,
+            CutPathPoint.Point.Z,
+            CutPathPoint.Normal.X,
+            CutPathPoint.Normal.Y,
+            CutPathPoint.Normal.Z);
     }
 }

@@ -39,3 +39,19 @@ struct FCutTetHit
 	// All intersection events with this tetrahedron
 	TArray<FCutIntersection> Intersections;
 };
+
+USTRUCT()
+struct FCutPathPoint
+{
+	GENERATED_BODY()
+
+	FVector3f Point = FVector3f::ZeroVector;
+
+	int32 TetId = INDEX_NONE;
+
+	int32 BladeSampleIndex = INDEX_NONE;
+
+	float SegmentT = 0.0f;
+
+	FVector3f Normal = FVector3f::ZeroVector;
+};
