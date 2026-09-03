@@ -27,7 +27,7 @@ private:
 	bool BuildTissueSnapshot();
 	void UpdateCurrentPositions();
 
-	void FindAffectedTetrahedra(const TArray<FVector>& PreviousBladePoints, const TArray<FVector>& CurrentBladePoints, TArray<FCutTetHit>& OutAffectedTets);
+	void FindAffectedTetrahedra(const TArray<FVector3f>& PreviousBladePoints, const TArray<FVector3f>& CurrentBladePoints, TArray<FCutTetHit>& OutAffectedTets);
 
 public:
 

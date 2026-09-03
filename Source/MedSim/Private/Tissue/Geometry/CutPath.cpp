@@ -2,7 +2,7 @@
 
 namespace CutPath
 {
-
+	// DEPRECATED
 	void BuildOrderedCutPoints(const TArray<FCutTetHit>& CutHits, TArray<FCutPathPoint>& OutPoints)
 	{
 		OutPoints.Reset();

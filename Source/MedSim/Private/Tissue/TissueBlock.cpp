@@ -1,6 +1,7 @@
 #include "Tissue/TissueBlock.h"
 #include "Tissue/Geometry/TissueIntersection.h"
 #include "Tissue/Geometry/CutPath.h"
+#include "Tissue/Geometry/SweptBlade.h"
 
 #include "ChaosFlesh/FleshComponent.h"
 #include "ChaosFlesh/ChaosDeformableSolverComponent.h"
@@ -266,7 +267,7 @@ void ATissueBlock::UpdateCurrentPositions()
     }
 }
 
-void ATissueBlock::FindAffectedTetrahedra(const TArray<FVector>& PreviousBladePoints, const TArray<FVector>& CurrentBladePoints, TArray<FCutTetHit>& OutAffectedTets)
+void ATissueBlock::FindAffectedTetrahedra(const TArray<FVector3f>& PreviousBladePoints, const TArray<FVector3f>& CurrentBladePoints, TArray<FCutTetHit>& OutAffectedTets)
 {
     OutAffectedTets.Reset();
 
@@ -294,24 +295,6 @@ void ATissueBlock::FindAffectedTetrahedra(const TArray<FVector>& PreviousBladePo
     }
 
     // ------------------------------------------------------------
-    // World -> Flesh local
-    // ------------------------------------------------------------
-
-    const FTransform TissueTransform = FleshComponent->GetComponentTransform();
-
-    TArray<FVector3f> PreviousLocalPoints;
-    TArray<FVector3f> CurrentLocalPoints;
-
-    PreviousLocalPoints.Reserve(PreviousBladePoints.Num());
-    CurrentLocalPoints.Reserve(CurrentBladePoints.Num());
-
-    for (int32 i = 0; i < PreviousBladePoints.Num(); ++i)
-    {
-        PreviousLocalPoints.Add(FVector3f(TissueTransform.InverseTransformPosition(PreviousBladePoints[i])));
-        CurrentLocalPoints.Add(FVector3f(TissueTransform.InverseTransformPosition(CurrentBladePoints[i])));
-    }
-
-    // ------------------------------------------------------------
     // Map:
     // TetId -> index inside OutAffectedTets
     //
@@ -325,10 +308,10 @@ void ATissueBlock::FindAffectedTetrahedra(const TArray<FVector>& PreviousBladePo
     // Blade sample trajectories
     // ------------------------------------------------------------
 
-    for (int32 BladeIndex = 0; BladeIndex < PreviousLocalPoints.Num(); ++BladeIndex)
+    for (int32 BladeIndex = 0; BladeIndex < PreviousBladePoints.Num(); ++BladeIndex)
     {
-        const FVector3f SegmentStart = PreviousLocalPoints[BladeIndex];
-        const FVector3f SegmentEnd = CurrentLocalPoints[BladeIndex];
+        const FVector3f SegmentStart = PreviousBladePoints[BladeIndex];
+        const FVector3f SegmentEnd = CurrentBladePoints[BladeIndex];
 
         // No movement -> no trajectory
         if (SegmentStart.Equals(SegmentEnd, 0.001f))
@@ -401,13 +384,128 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
 {
     UpdateCurrentPositions();
 
+    // --------------------------------------------------------
+    // World -> Local Blade points
+    // --------------------------------------------------------
+    const FTransform TissueTransform = FleshComponent->GetComponentTransform();
+
+    TArray<FVector3f> PreviousLocalPoints;
+    TArray<FVector3f> CurrentLocalPoints;
+
+    PreviousLocalPoints.Reserve(PreviousBladePoints.Num());
+    CurrentLocalPoints.Reserve(CurrentBladePoints.Num());
+
+    for (int32 i = 0; i < PreviousBladePoints.Num(); ++i)
+    {
+        PreviousLocalPoints.Add(FVector3f(TissueTransform.InverseTransformPosition(PreviousBladePoints[i])));
+        CurrentLocalPoints.Add(FVector3f(TissueTransform.InverseTransformPosition(CurrentBladePoints[i])));
+    }
+    // --------------------------------------------------------
+
+    // --------------------------------------------------------
+    // Build swept surface
+    // --------------------------------------------------------
+    TArray<FSweptBladeTriangle> SweptTriangles;
+    SweptBlade::BuildSurface(PreviousLocalPoints, CurrentLocalPoints, SweptTriangles);
+
+    UE_LOG(LogTemp, Log, TEXT("Swept blade: %d triangles"), SweptTriangles.Num());
+    for (int32 TriangleIndex = 0; TriangleIndex < SweptTriangles.Num(); ++TriangleIndex)
+    {
+        const FSweptBladeTriangle& Triangle = SweptTriangles[TriangleIndex];
+
+        UE_LOG(
+            LogTemp,
+            Log,
+            TEXT(
+                "SweptTriangle[%d] Samples=(%d,%d) "
+                "A=(%.3f, %.3f, %.3f) "
+                "B=(%.3f, %.3f, %.3f) "
+                "C=(%.3f, %.3f, %.3f)"
+            ),
+            TriangleIndex,
+            Triangle.BladeSampleA,
+            Triangle.BladeSampleB,
+            Triangle.A.X,
+            Triangle.A.Y,
+            Triangle.A.Z,
+            Triangle.B.X,
+            Triangle.B.Y,
+            Triangle.B.Z,
+            Triangle.C.X,
+            Triangle.C.Y,
+            Triangle.C.Z
+        );
+    }
+
+    for (const FSweptBladeTriangle& Triangle : SweptTriangles)
+    {
+        const FVector WorldA = TissueTransform.TransformPosition(FVector(Triangle.A));
+        const FVector WorldB = TissueTransform.TransformPosition(FVector(Triangle.B));
+        const FVector WorldC = TissueTransform.TransformPosition(FVector(Triangle.C));
+
+        DrawDebugLine(
+            GetWorld(),
+            WorldA,
+            WorldB,
+            FColor::Green,
+            false,
+            0.1f,
+            0,
+            1.5f
+        );
+
+        DrawDebugLine(
+            GetWorld(),
+            WorldB,
+            WorldC,
+            FColor::Green,
+            false,
+            0.1f,
+            0,
+            1.5f
+        );
+
+        DrawDebugLine(
+            GetWorld(),
+            WorldC,
+            WorldA,
+            FColor::Green,
+            false,
+            0.1f,
+            0,
+            1.5f
+        );
+    }
+
+    // --------------------------------------------------------
+
+    // --------------------------------------------------------
     TArray<FCutTetHit> OutHits;
-    FindAffectedTetrahedra(PreviousBladePoints, CurrentBladePoints, OutHits);
+    FindAffectedTetrahedra(PreviousLocalPoints, CurrentLocalPoints, OutHits);
 
-    UE_LOG(LogTemp, Display, TEXT("Affected tetrahedra: %d"), OutHits.Num());
+    int32 TotalRawIntersections = 0;
 
+    for (const FCutTetHit& Hit : OutHits)
+    {
+        TotalRawIntersections += Hit.Intersections.Num();
+    }
+
+    UE_LOG(
+        LogTemp,
+        Display,
+        TEXT("AffectedTets=%d RawIntersections=%d"),
+        OutHits.Num(),
+        TotalRawIntersections);
+
+    // --------------------------------------------------------
     TArray<FCutPathPoint> OutCutPathPoints;
     CutPath::BuildOrderedCutPoints(OutHits, OutCutPathPoints);
+
+    UE_LOG(
+        LogTemp,
+        Display,
+        TEXT("OrderedCutPoints=%d"),
+        OutCutPathPoints.Num());
 
     for (const FCutPathPoint CutPathPoint : OutCutPathPoints)
     {
@@ -429,4 +527,6 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
             CutPathPoint.Normal.Y,
             CutPathPoint.Normal.Z);
     }
+
+    // --------------------------------------------------------
 }
