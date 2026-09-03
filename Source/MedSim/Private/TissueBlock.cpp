@@ -594,7 +594,7 @@ void ATissueBlock::FindAffectedTetrahedra(const TArray<FVector>& PreviousBladePo
 
                 TetIdToHitIndex.Add(TetId, NewHitIndex);
 
-                *ExistingHitIndex = NewHitIndex;
+                ExistingHitIndex = TetIdToHitIndex.Find(TetId);
             }
 
             FCutTetHit& TetHit = OutAffectedTets[*ExistingHitIndex];
