@@ -1,5 +1,5 @@
-#include "Scalpel.h"
-#include "TissueBlock.h"
+#include "Instruments/Scalpel.h"
+#include "Tissue/TissueBlock.h"
 #include "Components/SplineComponent.h"
 #include "Kismet/GameplayStatics.h"
 

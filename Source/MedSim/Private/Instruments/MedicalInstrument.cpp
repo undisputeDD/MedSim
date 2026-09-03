@@ -1,4 +1,4 @@
-#include "MedicalInstrument.h"
+#include "Instruments/MedicalInstrument.h"
 #include "Components/StaticMeshComponent.h"
 
 AMedicalInstrument::AMedicalInstrument()

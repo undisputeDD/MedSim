@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "MedicalInstrument.h"
+#include "Instruments/MedicalInstrument.h"
 #include "Scalpel.generated.h"
 
 class ATissueBlock;
