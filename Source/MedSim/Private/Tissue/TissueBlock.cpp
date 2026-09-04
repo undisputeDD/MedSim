@@ -2,6 +2,7 @@
 #include "Tissue/Geometry/TissueIntersection.h"
 #include "Tissue/Geometry/CutPath.h"
 #include "Tissue/Geometry/SweptBlade.h"
+#include "Tissue/Geometry/SweptBladeIntersection.h"
 
 #include "ChaosFlesh/FleshComponent.h"
 #include "ChaosFlesh/ChaosDeformableSolverComponent.h"
@@ -385,7 +386,7 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
     UpdateCurrentPositions();
 
     // --------------------------------------------------------
-    // World -> Local Blade points
+    // 1. World -> Local Blade points
     // --------------------------------------------------------
     const FTransform TissueTransform = FleshComponent->GetComponentTransform();
 
@@ -403,13 +404,14 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
     // --------------------------------------------------------
 
     // --------------------------------------------------------
-    // Build swept surface
+    // 2. Build swept surface
     // --------------------------------------------------------
     TArray<FSweptBladeTriangle> SweptTriangles;
     SweptBlade::BuildSurface(PreviousLocalPoints, CurrentLocalPoints, SweptTriangles);
 
     UE_LOG(LogTemp, Log, TEXT("Swept blade: %d triangles"), SweptTriangles.Num());
-    for (int32 TriangleIndex = 0; TriangleIndex < SweptTriangles.Num(); ++TriangleIndex)
+
+    /*for (int32 TriangleIndex = 0; TriangleIndex < SweptTriangles.Num(); ++TriangleIndex)
     {
         const FSweptBladeTriangle& Triangle = SweptTriangles[TriangleIndex];
 
@@ -475,57 +477,97 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
             0,
             1.5f
         );
-    }
+    }*/
 
     // --------------------------------------------------------
 
+    // --------------------------------------------------------
+    // 3. Broad phase
     // --------------------------------------------------------
     TArray<FCutTetHit> OutHits;
     FindAffectedTetrahedra(PreviousLocalPoints, CurrentLocalPoints, OutHits);
 
-    int32 TotalRawIntersections = 0;
+    /*int32 TotalRawIntersections = 0;
 
     for (const FCutTetHit& Hit : OutHits)
     {
         TotalRawIntersections += Hit.Intersections.Num();
-    }
+    }*/
 
     UE_LOG(
         LogTemp,
         Display,
-        TEXT("AffectedTets=%d RawIntersections=%d"),
-        OutHits.Num(),
-        TotalRawIntersections);
+        TEXT("Broad AffectedTets=%d"),
+        OutHits.Num());
 
     // --------------------------------------------------------
-    TArray<FCutPathPoint> OutCutPathPoints;
-    CutPath::BuildOrderedCutPoints(OutHits, OutCutPathPoints);
+    // 4. Candidate tet ids
+    // --------------------------------------------------------
+    TArray<int32> CandidateTetIds;
+
+    CandidateTetIds.Reserve(OutHits.Num());
+
+    for (const FCutTetHit& Hit : OutHits)
+    {
+        CandidateTetIds.Add(Hit.TetId);
+    }
+
+    // --------------------------------------------------------
+
+    // --------------------------------------------------------
+    // 5. Narrow phase
+    // --------------------------------------------------------
+    TArray<FTriangleTetIntersection> Intersections;
+
+    SweptBladeIntersection::FindIntersections(
+        SweptTriangles,
+        CandidateTetIds,
+        TissueSnapshot,
+        Intersections
+    );
 
     UE_LOG(
         LogTemp,
         Display,
-        TEXT("OrderedCutPoints=%d"),
-        OutCutPathPoints.Num());
+        TEXT("TriangleTet Intersections=%d"),
+        Intersections.Num()
+    );
 
-    for (const FCutPathPoint CutPathPoint : OutCutPathPoints)
+    // --------------------------------------------------------
+
+    // --------------------------------------------------------
+    // 6. Debug
+    // --------------------------------------------------------
+
+    for (const FTriangleTetIntersection& Intersection : Intersections)
     {
         UE_LOG(
             LogTemp,
             Display,
             TEXT(
-                "  TetId=%d "
-                "Blade=%d T=%.3f "
-                "Point=(%.2f %.2f %.2f) "
-                "Normal=(%.2f %.2f %.2f)"),
-            CutPathPoint.TetId,
-            CutPathPoint.BladeSampleIndex,
-            CutPathPoint.SegmentT,
-            CutPathPoint.Point.X,
-            CutPathPoint.Point.Y,
-            CutPathPoint.Point.Z,
-            CutPathPoint.Normal.X,
-            CutPathPoint.Normal.Y,
-            CutPathPoint.Normal.Z);
+                "Tet=%d Triangle=%d PolygonVertices=%d"
+            ),
+            Intersection.TetId,
+            Intersection.BladeTriangleIndex,
+            Intersection.Polygon.Num()
+        );
+
+        for (int32 i = 0; i < Intersection.Polygon.Num(); ++i)
+        {
+            FVector WorldA = TissueTransform.TransformPosition(FVector(Intersection.Polygon[i]));
+            FVector WorldB = TissueTransform.TransformPosition(FVector(Intersection.Polygon[(i + 1) % Intersection.Polygon.Num()]));
+
+            DrawDebugLine(
+                GetWorld(),
+                WorldA,
+                WorldB,
+                FColor::Green,
+                false,
+                20.f,
+                0,
+                0.05f
+            );
+        }
     }
 
     // --------------------------------------------------------
