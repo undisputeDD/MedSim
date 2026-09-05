@@ -590,7 +590,7 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
                 false,
                 20.f,
                 0,
-                0.05f
+                0.02f
             );
         }
     }
@@ -675,7 +675,9 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
                 8,
                 FColor::Red,
                 false,
-                20.0f
+                20.0f,
+                0,
+                0.04f
             );
         }
     }
