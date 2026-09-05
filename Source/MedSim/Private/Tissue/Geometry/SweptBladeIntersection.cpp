@@ -1,5 +1,5 @@
 #include "Tissue/Geometry/SweptBladeIntersection.h"
-#include "Tissue/Geometry/TissueIntersection.h"
+#include "Tissue/Geometry/Utility.h"
 
 namespace
 {
@@ -68,6 +68,43 @@ static bool IsPointInTriangle(
 	return U >= -Epsilon && V >= -Epsilon && U + V <= 1.0f + Epsilon;
 }
 
+// Barycentric coords
+static bool IsPointInTetrahedron(
+	const FVector3f& P,
+	const FVector3f& V0,
+	const FVector3f& V1,
+	const FVector3f& V2,
+	const FVector3f& V3)
+{
+	const FVector3f D0 = V1 - V0;
+	const FVector3f D1 = V2 - V0;
+	const FVector3f D2 = V3 - V0;
+	const FVector3f DP = P - V0;
+
+	const float Det = FVector3f::DotProduct(D0, FVector3f::CrossProduct(D1, D2));
+
+	constexpr float Epsilon = 1e-6f;
+
+	if (FMath::Abs(Det) < Epsilon)
+	{
+		return false;
+	}
+
+	const float InvDet = 1.0f / Det;
+
+	const float U = FVector3f::DotProduct(DP, FVector3f::CrossProduct(D1, D2)) * InvDet;
+
+	const float V = FVector3f::DotProduct(D0, FVector3f::CrossProduct(DP, D2)) * InvDet;
+
+	const float W = FVector3f::DotProduct(D0, FVector3f::CrossProduct(D1, DP)) * InvDet;
+
+	const float X = 1.0f - U - V - W;
+
+	const float Tolerance = 1e-4f;
+
+	return U >= -Tolerance && V >= -Tolerance && W >= -Tolerance && X >= -Tolerance;
+}
+
 static FVector3f ComputeCentroid(
 	const TArray<FVector3f>& Points)
 {
@@ -118,17 +155,17 @@ bool SweptBladeIntersection::IntersectTriangleWithTet(
 	// 1. Triangle vertices inside tetrahedron
 	// --------------------------------------------------------
 
-	if (TissueIntersection::IsPointInTetrahedron(BladeTriangle.A, V[0], V[1], V[2], V[3]))
+	if (IsPointInTetrahedron(BladeTriangle.A, V[0], V[1], V[2], V[3]))
 	{
 		AddUniquePoint(BladeTriangle.A);
 	}
 
-	if (TissueIntersection::IsPointInTetrahedron(BladeTriangle.B, V[0], V[1], V[2], V[3]))
+	if (IsPointInTetrahedron(BladeTriangle.B, V[0], V[1], V[2], V[3]))
 	{
 		AddUniquePoint(BladeTriangle.B);
 	}
 
-	if (TissueIntersection::IsPointInTetrahedron(BladeTriangle.C, V[0], V[1], V[2], V[3]))
+	if (IsPointInTetrahedron(BladeTriangle.C, V[0], V[1], V[2], V[3]))
 	{
 		AddUniquePoint(BladeTriangle.C);
 	}
@@ -166,7 +203,7 @@ bool SweptBladeIntersection::IntersectTriangleWithTet(
 			FVector3f Normal;
 
 			// TODO: coplanar case
-			if (TissueIntersection::SegmentIntersectsTriangle(
+			if (Utility::SegmentIntersectsTriangle(
 				Start,
 				End,
 				V[Face.A],
@@ -205,7 +242,7 @@ bool SweptBladeIntersection::IntersectTriangleWithTet(
 		FVector3f Normal;
 
 		// TODO: coplanar case
-		if (TissueIntersection::SegmentIntersectsTriangle(
+		if (Utility::SegmentIntersectsTriangle(
 			Start,
 			End,
 			BladeTriangle.A,

@@ -1,9 +1,8 @@
 #include "Tissue/TissueBlock.h"
-#include "Tissue/Geometry/TissueIntersection.h"
-#include "Tissue/Geometry/CutPath.h"
 #include "Tissue/Geometry/SweptBlade.h"
 #include "Tissue/Geometry/SweptBladeIntersection.h"
 #include "Tissue/Geometry/TissueCutSurface.h"
+#include "Tissue/Geometry/SweptBladeBroadPhase.h"
 
 #include "ChaosFlesh/FleshComponent.h"
 #include "ChaosFlesh/ChaosDeformableSolverComponent.h"
@@ -269,119 +268,6 @@ void ATissueBlock::UpdateCurrentPositions()
     }
 }
 
-void ATissueBlock::FindAffectedTetrahedra(const TArray<FVector3f>& PreviousBladePoints, const TArray<FVector3f>& CurrentBladePoints, TArray<FCutTetHit>& OutAffectedTets)
-{
-    OutAffectedTets.Reset();
-
-    if (!FleshComponent)
-        return;
-
-    if (PreviousBladePoints.Num() != CurrentBladePoints.Num())
-    {
-        UE_LOG(
-            LogTemp,
-            Warning,
-            TEXT("Blade sample count mismatch: Previous=%d Current=%d"),
-            PreviousBladePoints.Num(),
-            CurrentBladePoints.Num());
-
-        return;
-    }
-
-    if (PreviousBladePoints.Num() == 0) // No segment to create: do nothing
-        return;
-
-    if (TissueSnapshot.Vertices.Num() == 0 || TissueSnapshot.Tetrahedra.Num() == 0)
-    {
-        return;
-    }
-
-    // ------------------------------------------------------------
-    // Map:
-    // TetId -> index inside OutAffectedTets
-    //
-    // This allows us to visit a Tet multiple times from
-    // different blade trajectories but still keep ONE FCutTetHit.
-    // ------------------------------------------------------------
-
-    TMap<int32, int32> TetIdToHitIndex;
-
-    // ------------------------------------------------------------
-    // Blade sample trajectories
-    // ------------------------------------------------------------
-
-    for (int32 BladeIndex = 0; BladeIndex < PreviousBladePoints.Num(); ++BladeIndex)
-    {
-        const FVector3f SegmentStart = PreviousBladePoints[BladeIndex];
-        const FVector3f SegmentEnd = CurrentBladePoints[BladeIndex];
-
-        // No movement -> no trajectory
-        if (SegmentStart.Equals(SegmentEnd, 0.001f))
-        {
-            continue;
-        }
-
-        // --------------------------------------------------------
-        // Test against every tetrahedron
-        // --------------------------------------------------------
-
-        for (int32 TetId = 0; TetId < TissueSnapshot.Tetrahedra.Num(); ++TetId)
-        {
-            const FTissueTet& Tet = TissueSnapshot.Tetrahedra[TetId];
-
-            const FVector3f& V0 = TissueSnapshot.Vertices[Tet.Vertices.X].CurrentPosition;
-            const FVector3f& V1 = TissueSnapshot.Vertices[Tet.Vertices.Y].CurrentPosition;
-            const FVector3f& V2 = TissueSnapshot.Vertices[Tet.Vertices.Z].CurrentPosition;
-            const FVector3f& V3 = TissueSnapshot.Vertices[Tet.Vertices.W].CurrentPosition;
-
-            TArray<FCutIntersection> OutIntersections;
-
-            const bool bAffected = TissueIntersection::SegmentIntersectsTetrahedron(SegmentStart,
-                                                                                    SegmentEnd,
-                                                                                    BladeIndex,
-                                                                                    V0,
-                                                                                    V1,
-                                                                                    V2,
-                                                                                    V3,
-                                                                                    OutIntersections);
-            if (!bAffected)
-            {
-                continue;
-            }
-
-            // ----------------------------------------------------
-            // Get existing FCutTetHit or create a new one
-            // ----------------------------------------------------
-
-            int32* ExistingHitIndex = TetIdToHitIndex.Find(TetId);
-            if (!ExistingHitIndex)
-            {
-                const int32 NewHitIndex = OutAffectedTets.AddDefaulted();
-
-                FCutTetHit& NewHit = OutAffectedTets[NewHitIndex];
-
-                NewHit.TetId = TetId;
-
-                TetIdToHitIndex.Add(TetId, NewHitIndex);
-
-                ExistingHitIndex = TetIdToHitIndex.Find(TetId);
-            }
-
-            FCutTetHit& TetHit = OutAffectedTets[*ExistingHitIndex];
-
-            // ----------------------------------------------------
-            // Add all exact intersection events found for this
-            // blade trajectory
-            // ----------------------------------------------------
-
-            for (const FCutIntersection& Intersection : OutIntersections)
-            {
-                TetHit.Intersections.Add(Intersection);
-            }
-        }
-    }
-}
-
 static bool WasMotion(const TArray<FVector>& PreviousBladePoints, const TArray<FVector>& CurrentBladePoints)
 {
     constexpr float MotionEpsilon = 0.001f;
@@ -404,6 +290,7 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
     // --------------------------------------------------------
     // 0. No motion -> No need to check
     // --------------------------------------------------------
+
     if (!WasMotion(PreviousBladePoints, CurrentBladePoints))
     {
         return;
@@ -413,6 +300,7 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
     // --------------------------------------------------------
     // 1. World -> Local Blade points
     // --------------------------------------------------------
+
     const FTransform TissueTransform = FleshComponent->GetComponentTransform();
 
     TArray<FVector3f> PreviousLocalPoints;
@@ -431,6 +319,7 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
     // --------------------------------------------------------
     // 2. Build swept surface
     // --------------------------------------------------------
+
     TArray<FSweptBladeTriangle> SweptTriangles;
     SweptBlade::BuildSurface(PreviousLocalPoints, CurrentLocalPoints, SweptTriangles);
 
@@ -507,41 +396,30 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
     // --------------------------------------------------------
 
     // --------------------------------------------------------
-    // 3. Broad phase
+    // 3. AABB Broad phase
     // --------------------------------------------------------
-    TArray<FCutTetHit> OutHits;
-    FindAffectedTetrahedra(PreviousLocalPoints, CurrentLocalPoints, OutHits);
 
-    /*int32 TotalRawIntersections = 0;
+    TArray<int32> CandidateTetIds;
 
-    for (const FCutTetHit& Hit : OutHits)
-    {
-        TotalRawIntersections += Hit.Intersections.Num();
-    }*/
+    SweptBladeBroadPhase::FindCandidateTetrahedra(
+        SweptTriangles,
+        TissueSnapshot,
+        CandidateTetIds
+    );
 
     UE_LOG(
         LogTemp,
         Display,
-        TEXT("Broad AffectedTets=%d"),
-        OutHits.Num());
-
-    // --------------------------------------------------------
-    // 4. Candidate tet ids
-    // --------------------------------------------------------
-    TArray<int32> CandidateTetIds;
-
-    CandidateTetIds.Reserve(OutHits.Num());
-
-    for (const FCutTetHit& Hit : OutHits)
-    {
-        CandidateTetIds.Add(Hit.TetId);
-    }
+        TEXT("AABB Broad Phase: CandidateTets=%d"),
+        CandidateTetIds.Num()
+    );
 
     // --------------------------------------------------------
 
     // --------------------------------------------------------
-    // 5. Narrow phase
+    // 4. Narrow phase
     // --------------------------------------------------------
+
     TArray<FTriangleTetIntersection> Intersections;
 
     SweptBladeIntersection::FindIntersections(
@@ -561,7 +439,7 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
     // --------------------------------------------------------
 
     // --------------------------------------------------------
-    // 6. Debug FTriangleTetIntersection
+    // 5. Debug FTriangleTetIntersection
     // --------------------------------------------------------
 
     for (const FTriangleTetIntersection& Intersection : Intersections)
@@ -598,7 +476,7 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
     // --------------------------------------------------------
 
     // --------------------------------------------------------
-    // 7. Build FTetCutData
+    // 6. Build FTetCutData
     // --------------------------------------------------------
 
     TArray<FTetCutData> TetCutData;

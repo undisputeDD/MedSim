@@ -3,7 +3,6 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Tissue/Data/TissueTopology.h"
-#include "Tissue/Data/TissueCutTypes.h"
 #include "TissueBlock.generated.h"
 
 class UFleshComponent;
@@ -26,8 +25,6 @@ protected:
 private:
 	bool BuildTissueSnapshot();
 	void UpdateCurrentPositions();
-
-	void FindAffectedTetrahedra(const TArray<FVector3f>& PreviousBladePoints, const TArray<FVector3f>& CurrentBladePoints, TArray<FCutTetHit>& OutAffectedTets);
 
 public:
 

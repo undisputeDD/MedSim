@@ -1,5 +1,5 @@
 #include "Tissue/Geometry/TissueCutSurface.h"
-#include "Tissue/Geometry/TissueIntersection.h"
+#include "Tissue/Geometry/Utility.h"
 
 float TissueCutSurface::ComputePolygonArea(const TArray<FVector3f>& Polygon)
 {
@@ -214,7 +214,7 @@ void TissueCutSurface::FindTetEdgeIntersections(const TArray<FSweptBladeTriangle
 			float EdgeT = 0.0f;
 			FVector3f TriangleNormal;
 
-			if (TissueIntersection::
+			if (Utility::
 				SegmentIntersectsTriangle(
 					EdgeStart,
 					EdgeEnd,

@@ -20,6 +20,7 @@ struct FSweptBladeTriangle
 	int32 BladeSampleB = INDEX_NONE;
 };
 
+// Building swept geometry
 namespace SweptBlade
 {
 	/**

@@ -59,6 +59,7 @@ struct FTetCutData
 	bool bNeedsCut = false;
 };
 
+// Result of intersections
 namespace TissueCutSurface
 {
 	float ComputePolygonArea(const TArray<FVector3f>& Polygon);

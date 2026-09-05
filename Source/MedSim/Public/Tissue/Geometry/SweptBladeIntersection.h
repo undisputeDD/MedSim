@@ -1,7 +1,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Tissue/Data/TissueCutTypes.h"
 #include "Tissue/Data/TissueTopology.h"
 #include "Tissue/Geometry/SweptBlade.h"
 
@@ -15,6 +14,7 @@ struct FTriangleTetIntersection
 	FVector3f Normal = FVector3f::ZeroVector;
 };
 
+// Precise tria tet intersection
 namespace SweptBladeIntersection
 {
 	bool IntersectTriangleWithTet(
