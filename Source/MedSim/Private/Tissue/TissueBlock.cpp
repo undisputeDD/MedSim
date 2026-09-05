@@ -3,6 +3,7 @@
 #include "Tissue/Geometry/CutPath.h"
 #include "Tissue/Geometry/SweptBlade.h"
 #include "Tissue/Geometry/SweptBladeIntersection.h"
+#include "Tissue/Geometry/TissueCutSurface.h"
 
 #include "ChaosFlesh/FleshComponent.h"
 #include "ChaosFlesh/ChaosDeformableSolverComponent.h"
@@ -381,9 +382,33 @@ void ATissueBlock::FindAffectedTetrahedra(const TArray<FVector3f>& PreviousBlade
     }
 }
 
+static bool WasMotion(const TArray<FVector>& PreviousBladePoints, const TArray<FVector>& CurrentBladePoints)
+{
+    constexpr float MotionEpsilon = 0.001f;
+
+    for (int32 i = 0; i < PreviousBladePoints.Num(); ++i)
+    {
+        if (!PreviousBladePoints[i].Equals(CurrentBladePoints[i], MotionEpsilon))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TArray<FVector>& CurrentBladePoints)
 {
     UpdateCurrentPositions();
+
+    // --------------------------------------------------------
+    // 0. No motion -> No need to check
+    // --------------------------------------------------------
+    if (!WasMotion(PreviousBladePoints, CurrentBladePoints))
+    {
+        return;
+    }
+    // --------------------------------------------------------
 
     // --------------------------------------------------------
     // 1. World -> Local Blade points
@@ -536,7 +561,7 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
     // --------------------------------------------------------
 
     // --------------------------------------------------------
-    // 6. Debug
+    // 6. Debug FTriangleTetIntersection
     // --------------------------------------------------------
 
     for (const FTriangleTetIntersection& Intersection : Intersections)
@@ -571,4 +596,87 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
     }
 
     // --------------------------------------------------------
+
+    // --------------------------------------------------------
+    // 7. Build FTetCutData
+    // --------------------------------------------------------
+
+    TArray<FTetCutData> TetCutData;
+    TissueCutSurface::BuildTetCutData(Intersections, TetCutData);
+
+    /*for (const FTetCutData& TetCut : TetCutData)
+    {
+        UE_LOG(
+            LogTemp,
+            Display,
+            TEXT("TetId = %d PatchesSize = %d BoundaryIntersections = %d Area = %f NeedsCut = %s"),
+            TetCut.TetId,
+            TetCut.Patches.Num(),
+            TetCut.BoundaryIntersections.Num(),
+            TetCut.TotalIntersectionArea,
+            TetCut.bNeedsCut ? TEXT("Yes") : TEXT("No")
+        );
+    }*/
+
+    // --------------------------------------------------------
+
+    for (FTetCutData& TetCut : TetCutData)
+    {
+        TissueCutSurface::FindTetEdgeIntersections(
+            SweptTriangles,
+            TissueSnapshot,
+            TetCut
+        );
+
+        UE_LOG(
+            LogTemp,
+            Display,
+            TEXT(
+                "TetId=%d "
+                "Patches=%d "
+                "Area=%.6f "
+                "BoundaryIntersections=%d "
+                "NeedsCut=%s"
+            ),
+            TetCut.TetId,
+            TetCut.Patches.Num(),
+            TetCut.TotalIntersectionArea,
+            TetCut.BoundaryIntersections.Num(),
+            TetCut.bNeedsCut
+            ? TEXT("Yes")
+            : TEXT("No")
+        );
+
+        for (const FTetBoundaryIntersection&
+            Intersection :
+            TetCut.BoundaryIntersections)
+        {
+            UE_LOG(
+                LogTemp,
+                Display,
+                TEXT(
+                    "    Edge=%d "
+                    "T=%.4f "
+                    "Point=(%.3f %.3f %.3f) "
+                    "BladeTriangle=%d"
+                ),
+                Intersection.TetEdgeIndex,
+                Intersection.EdgeT,
+                Intersection.Point.X,
+                Intersection.Point.Y,
+                Intersection.Point.Z,
+                Intersection.BladeTriangleIndex
+            );
+
+            DrawDebugSphere(
+                GetWorld(),
+                TissueTransform.TransformPosition(FVector(Intersection.Point)),
+                0.15f,
+                8,
+                FColor::Red,
+                false,
+                20.0f
+            );
+        }
+    }
 }
