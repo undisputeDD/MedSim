@@ -1,7 +1,7 @@
 #include "Tissue/TissueBlock.h"
 #include "Tissue/Geometry/SweptBlade.h"
 #include "Tissue/Geometry/SweptBladeIntersection.h"
-#include "Tissue/Geometry/TissueCutSurface.h"
+#include "Tissue/Geometry/TetCutSurface.h"
 #include "Tissue/Geometry/SweptBladeBroadPhase.h"
 
 #include "ChaosFlesh/FleshComponent.h"
@@ -480,7 +480,7 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
     // --------------------------------------------------------
 
     TArray<FTetCutData> TetCutData;
-    TissueCutSurface::BuildTetCutData(Intersections, TetCutData);
+    TetCutSurface::BuildTetCutData(Intersections, TetCutData);
 
     /*for (const FTetCutData& TetCut : TetCutData)
     {
@@ -498,5 +498,55 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
 
     // --------------------------------------------------------
 
-    
+    // --------------------------------------------------------
+    // 7. Build FTetCutSurface
+    // --------------------------------------------------------
+
+    TArray<FTetCutSurface> CutSurfaces;
+
+    for (const FTetCutData& TetCut : TetCutData)
+    {
+        if (!TetCut.bNeedsCut)
+        {
+            continue;
+        }
+
+        FTetCutSurface Surface;
+
+        if (!TetCutSurface::Build(
+            TetCut,
+            0.01f,     // vertex merge tolerance
+            Surface))
+        {
+            continue;
+        }
+
+        /*TetCutSurface::FindTetFaceCutSegments(
+            Surface,
+            TissueSnapshot,
+            0.01f,
+            Surface.FaceSegments
+        );*/
+
+        UE_LOG(
+            LogTemp,
+            Display,
+            TEXT(
+                "CutSurface Tet=%d "
+                "Vertices=%d "
+                "Triangles=%d "
+                "Area=%.6f "
+                "FaceSegments=%d"
+            ),
+            Surface.TetId,
+            Surface.Vertices.Num(),
+            Surface.Triangles.Num(),
+            Surface.Area,
+            Surface.FaceSegments.Num()
+        );
+
+        CutSurfaces.Add(MoveTemp(Surface));
+    }
+
+    // --------------------------------------------------------
 }
