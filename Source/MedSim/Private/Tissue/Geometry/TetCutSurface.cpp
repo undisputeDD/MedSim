@@ -86,6 +86,7 @@ void TetCutSurface::BuildTetCutData(const TArray<FTriangleTetIntersection>& Inte
 
 static void TriangulateConvexPolygon(
 	const TArray<int32>& VertexIndices,
+	const TArray<FTetCutSurfaceVertex>& SurfaceVertices,
 	int32 SourcePatchIndex,
 	TArray<FTetCutSurfaceTriangle>& OutTriangles)
 {
@@ -96,13 +97,26 @@ static void TriangulateConvexPolygon(
 
 	for (int32 i = 1; i < VertexIndices.Num() - 1; ++i)
 	{
+		const int32 IndexA = VertexIndices[0];
+		const int32 IndexB = VertexIndices[i];
+		const int32 IndexC = VertexIndices[i + 1];
+
+		const FVector3f& A = SurfaceVertices[IndexA].Position;
+
+		const FVector3f& B = SurfaceVertices[IndexB].Position;
+
+		const FVector3f& C = SurfaceVertices[IndexC].Position;
+
+		const float TriangleArea = 0.5f * FVector3f::CrossProduct(B - A, C - A).Length();
+
+		if (TriangleArea <= KINDA_SMALL_NUMBER)
+		{
+			continue;
+		}
+
 		FTetCutSurfaceTriangle& Triangle = OutTriangles.AddDefaulted_GetRef();
 
-		Triangle.Vertices = FIntVector(
-			VertexIndices[0],
-			VertexIndices[i],
-			VertexIndices[i + 1]
-		);
+		Triangle.Vertices = FIntVector(IndexA, IndexB, IndexC);
 
 		Triangle.SourcePatchIndex = SourcePatchIndex;
 	}
@@ -175,7 +189,7 @@ bool TetCutSurface::Build(
 
 		const float PolygonArea = TetCutSurface::ComputePolygonArea(Patch.Polygon);
 
-		if (PolygonArea <= CutAreaEpsilon)
+		if (PolygonArea <= KINDA_SMALL_NUMBER)
 		{
 			continue;
 		}
@@ -197,7 +211,7 @@ bool TetCutSurface::Build(
 			continue;
 		}
 
-		TriangulateConvexPolygon(PolygonVertexIndices, PatchIndex, OutSurface.Triangles);
+		TriangulateConvexPolygon(PolygonVertexIndices, OutSurface.Vertices, PatchIndex, OutSurface.Triangles);
 	}
 
 	// Compute final area from generated triangles.
@@ -212,6 +226,13 @@ bool TetCutSurface::Build(
 		OutSurface.Area += 0.5f * FVector3f::CrossProduct(B - A, C - A).Length();
 	}
 
+	const float RawArea = TetCutData.TotalIntersectionArea;
+
+	const float RelativeAreaError =
+		RawArea > SMALL_NUMBER
+		? FMath::Abs(OutSurface.Area - RawArea) / RawArea
+		: 0.0f;
+
 	UE_LOG(
 		LogTemp,
 		Display,
@@ -222,14 +243,16 @@ bool TetCutSurface::Build(
 			"Vertices=%d "
 			"Triangles=%d "
 			"Area=%.6f "
-			"RawArea=%.6f"
+			"RawArea=%.6f "
+			"RelativeError=%.2f%%"
 		),
 		OutSurface.TetId,
 		TetCutData.Patches.Num(),
 		OutSurface.Vertices.Num(),
 		OutSurface.Triangles.Num(),
 		OutSurface.Area,
-		TetCutData.TotalIntersectionArea
+		TetCutData.TotalIntersectionArea,
+		RelativeAreaError * 100.f
 	);
 
 	return OutSurface.IsValid();

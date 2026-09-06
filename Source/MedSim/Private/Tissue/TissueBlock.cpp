@@ -455,7 +455,7 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
             Intersection.Polygon.Num()
         );
 
-        for (int32 i = 0; i < Intersection.Polygon.Num(); ++i)
+        /*for (int32 i = 0; i < Intersection.Polygon.Num(); ++i)
         {
             FVector WorldA = TissueTransform.TransformPosition(FVector(Intersection.Polygon[i]));
             FVector WorldB = TissueTransform.TransformPosition(FVector(Intersection.Polygon[(i + 1) % Intersection.Polygon.Num()]));
@@ -470,7 +470,7 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
                 0,
                 0.02f
             );
-        }
+        }*/
     }
 
     // --------------------------------------------------------
@@ -521,12 +521,12 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
             continue;
         }
 
-        /*TetCutSurface::FindTetFaceCutSegments(
+        TetCutSurface::FindTetFaceCutSegments(
             Surface,
             TissueSnapshot,
             0.01f,
             Surface.FaceSegments
-        );*/
+        );
 
         UE_LOG(
             LogTemp,
@@ -543,6 +543,142 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
             Surface.Triangles.Num(),
             Surface.Area,
             Surface.FaceSegments.Num()
+        );
+
+        constexpr int32 DebugTetId = 245;
+        if (Surface.TetId != DebugTetId)
+        {
+            continue;
+        }
+
+        for (const FTetCutSurfaceTriangle& CutTriangle : Surface.Triangles)
+        {
+            const FVector& A = TissueTransform.TransformPosition(FVector(Surface.Vertices[CutTriangle.Vertices.X].Position));
+
+            const FVector& B = TissueTransform.TransformPosition(FVector(Surface.Vertices[CutTriangle.Vertices.Y].Position));
+
+            const FVector& C = TissueTransform.TransformPosition(FVector(Surface.Vertices[CutTriangle.Vertices.Z].Position));
+
+            DrawDebugLine(
+                GetWorld(),
+                A,
+                B,
+                FColor::Green,
+                false,
+                20.f,
+                0,
+                0.02f
+            );
+
+            DrawDebugLine(
+                GetWorld(),
+                B,
+                C,
+                FColor::Green,
+                false,
+                20.f,
+                0,
+                0.02f
+            );
+
+            DrawDebugLine(
+                GetWorld(),
+                C,
+                A,
+                FColor::Green,
+                false,
+                20.f,
+                0,
+                0.02f
+            );
+        }
+
+        for (const FTetFaceCutSegment& FaceCutSegment : Surface.FaceSegments)
+        {
+            FVector A = TissueTransform.TransformPosition(FVector(FaceCutSegment.A));
+            FVector B = TissueTransform.TransformPosition(FVector(FaceCutSegment.B));
+
+            DrawDebugLine(
+                GetWorld(),
+                A,
+                B,
+                FColor::Red,
+                false,
+                20.f,
+                0,
+                0.02f
+            );
+        }
+
+        FVector TetA = TissueTransform.TransformPosition(FVector(TissueSnapshot.Vertices[TissueSnapshot.Tetrahedra[DebugTetId].Vertices.X].CurrentPosition));
+        FVector TetB = TissueTransform.TransformPosition(FVector(TissueSnapshot.Vertices[TissueSnapshot.Tetrahedra[DebugTetId].Vertices.Y].CurrentPosition));
+        FVector TetC = TissueTransform.TransformPosition(FVector(TissueSnapshot.Vertices[TissueSnapshot.Tetrahedra[DebugTetId].Vertices.Z].CurrentPosition));
+        FVector TetD = TissueTransform.TransformPosition(FVector(TissueSnapshot.Vertices[TissueSnapshot.Tetrahedra[DebugTetId].Vertices.W].CurrentPosition));
+
+        DrawDebugLine(
+            GetWorld(),
+            TetA,
+            TetB,
+            FColor::Yellow,
+            false,
+            20.f,
+            0,
+            0.02f
+        );
+
+        DrawDebugLine(
+            GetWorld(),
+            TetA,
+            TetC,
+            FColor::Yellow,
+            false,
+            20.f,
+            0,
+            0.02f
+        );
+
+        DrawDebugLine(
+            GetWorld(),
+            TetA,
+            TetD,
+            FColor::Yellow,
+            false,
+            20.f,
+            0,
+            0.02f
+        );
+
+        DrawDebugLine(
+            GetWorld(),
+            TetB,
+            TetC,
+            FColor::Yellow,
+            false,
+            20.f,
+            0,
+            0.02f
+        );
+
+        DrawDebugLine(
+            GetWorld(),
+            TetB,
+            TetD,
+            FColor::Yellow,
+            false,
+            20.f,
+            0,
+            0.02f
+        );
+
+        DrawDebugLine(
+            GetWorld(),
+            TetC,
+            TetD,
+            FColor::Yellow,
+            false,
+            20.f,
+            0,
+            0.02f
         );
 
         CutSurfaces.Add(MoveTemp(Surface));
