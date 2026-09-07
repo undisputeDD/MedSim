@@ -47,16 +47,6 @@ struct FTetCutSurfaceTriangle
     FVector3f Normal = FVector3f::ZeroVector;
 };
 
-struct FTetFaceCutSegment
-{
-    int32 TetFaceIndex = INDEX_NONE;
-
-    FVector3f A = FVector3f::ZeroVector;
-    FVector3f B = FVector3f::ZeroVector;
-
-    int32 SourceCutTriangleIndex = INDEX_NONE;
-};
-
 struct FTetCutSurface
 {
     int32 TetId = INDEX_NONE;
@@ -64,8 +54,6 @@ struct FTetCutSurface
     TArray<FTetCutSurfaceVertex> Vertices;
 
     TArray<FTetCutSurfaceTriangle> Triangles;
-
-    TArray<FTetFaceCutSegment> FaceSegments;
 
     float Area = 0.0f;
 
@@ -89,10 +77,4 @@ namespace TetCutSurface
         const FTetCutData& TetCutData,
         float VertexMergeTolerance,
         FTetCutSurface& OutSurface);
-
-    void FindTetFaceCutSegments(
-        const FTetCutSurface& CutSurface,
-        const FTissueTopologySnapshot& TissueSnapshot,
-        float PointTolerance,
-        TArray<FTetFaceCutSegment>& OutSegments);
 }

@@ -3,6 +3,7 @@
 #include "Tissue/Geometry/SweptBladeIntersection.h"
 #include "Tissue/Geometry/TetCutSurface.h"
 #include "Tissue/Geometry/SweptBladeBroadPhase.h"
+#include "Tissue/Geometry/TetCutBoundary.h"
 
 #include "ChaosFlesh/FleshComponent.h"
 #include "ChaosFlesh/ChaosDeformableSolverComponent.h"
@@ -499,10 +500,11 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
     // --------------------------------------------------------
 
     // --------------------------------------------------------
-    // 7. Build FTetCutSurface
+    // 7. Build FTetCutSurface and FTetCutBoundary
     // --------------------------------------------------------
 
     TArray<FTetCutSurface> CutSurfaces;
+    TArray<FTetCutBoundary> CutBoundaries;
 
     for (const FTetCutData& TetCut : TetCutData)
     {
@@ -521,167 +523,19 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
             continue;
         }
 
-        TetCutSurface::FindTetFaceCutSegments(
-            Surface,
+        FTetCutBoundary Boundary;
+
+        if (!TetCutBoundary::BuildTetCutBoundary(
+            TetCut,
             TissueSnapshot,
-            0.01f,
-            Surface.FaceSegments
-        );
-
-        UE_LOG(
-            LogTemp,
-            Display,
-            TEXT(
-                "CutSurface Tet=%d "
-                "Vertices=%d "
-                "Triangles=%d "
-                "Area=%.6f "
-                "FaceSegments=%d"
-            ),
-            Surface.TetId,
-            Surface.Vertices.Num(),
-            Surface.Triangles.Num(),
-            Surface.Area,
-            Surface.FaceSegments.Num()
-        );
-
-        constexpr int32 DebugTetId = 245;
-        if (Surface.TetId != DebugTetId)
+            0.01f,     // vertex merge tolerance
+            Boundary))
         {
             continue;
         }
 
-        for (const FTetCutSurfaceTriangle& CutTriangle : Surface.Triangles)
-        {
-            const FVector& A = TissueTransform.TransformPosition(FVector(Surface.Vertices[CutTriangle.Vertices.X].Position));
-
-            const FVector& B = TissueTransform.TransformPosition(FVector(Surface.Vertices[CutTriangle.Vertices.Y].Position));
-
-            const FVector& C = TissueTransform.TransformPosition(FVector(Surface.Vertices[CutTriangle.Vertices.Z].Position));
-
-            DrawDebugLine(
-                GetWorld(),
-                A,
-                B,
-                FColor::Green,
-                false,
-                20.f,
-                0,
-                0.02f
-            );
-
-            DrawDebugLine(
-                GetWorld(),
-                B,
-                C,
-                FColor::Green,
-                false,
-                20.f,
-                0,
-                0.02f
-            );
-
-            DrawDebugLine(
-                GetWorld(),
-                C,
-                A,
-                FColor::Green,
-                false,
-                20.f,
-                0,
-                0.02f
-            );
-        }
-
-        for (const FTetFaceCutSegment& FaceCutSegment : Surface.FaceSegments)
-        {
-            FVector A = TissueTransform.TransformPosition(FVector(FaceCutSegment.A));
-            FVector B = TissueTransform.TransformPosition(FVector(FaceCutSegment.B));
-
-            DrawDebugLine(
-                GetWorld(),
-                A,
-                B,
-                FColor::Red,
-                false,
-                20.f,
-                0,
-                0.02f
-            );
-        }
-
-        FVector TetA = TissueTransform.TransformPosition(FVector(TissueSnapshot.Vertices[TissueSnapshot.Tetrahedra[DebugTetId].Vertices.X].CurrentPosition));
-        FVector TetB = TissueTransform.TransformPosition(FVector(TissueSnapshot.Vertices[TissueSnapshot.Tetrahedra[DebugTetId].Vertices.Y].CurrentPosition));
-        FVector TetC = TissueTransform.TransformPosition(FVector(TissueSnapshot.Vertices[TissueSnapshot.Tetrahedra[DebugTetId].Vertices.Z].CurrentPosition));
-        FVector TetD = TissueTransform.TransformPosition(FVector(TissueSnapshot.Vertices[TissueSnapshot.Tetrahedra[DebugTetId].Vertices.W].CurrentPosition));
-
-        DrawDebugLine(
-            GetWorld(),
-            TetA,
-            TetB,
-            FColor::Yellow,
-            false,
-            20.f,
-            0,
-            0.02f
-        );
-
-        DrawDebugLine(
-            GetWorld(),
-            TetA,
-            TetC,
-            FColor::Yellow,
-            false,
-            20.f,
-            0,
-            0.02f
-        );
-
-        DrawDebugLine(
-            GetWorld(),
-            TetA,
-            TetD,
-            FColor::Yellow,
-            false,
-            20.f,
-            0,
-            0.02f
-        );
-
-        DrawDebugLine(
-            GetWorld(),
-            TetB,
-            TetC,
-            FColor::Yellow,
-            false,
-            20.f,
-            0,
-            0.02f
-        );
-
-        DrawDebugLine(
-            GetWorld(),
-            TetB,
-            TetD,
-            FColor::Yellow,
-            false,
-            20.f,
-            0,
-            0.02f
-        );
-
-        DrawDebugLine(
-            GetWorld(),
-            TetC,
-            TetD,
-            FColor::Yellow,
-            false,
-            20.f,
-            0,
-            0.02f
-        );
-
         CutSurfaces.Add(MoveTemp(Surface));
+        CutBoundaries.Add(MoveTemp(Boundary));
     }
 
     // --------------------------------------------------------
