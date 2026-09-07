@@ -99,7 +99,7 @@ static void BuildTetFaces(const FTissueTet & Tet, TArray<FTetFace>&OutFaces)
 {
     OutFaces.Reset();
     OutFaces.Reserve(4);
-    
+
     // Face opposite V0
     OutFaces.Add({
         0,
@@ -108,7 +108,7 @@ static void BuildTetFaces(const FTissueTet & Tet, TArray<FTetFace>&OutFaces)
         Tet.Vertices.Z,
         Tet.Vertices.W)
     });
-    
+
     // Face opposite V1
     OutFaces.Add({
         1,
@@ -117,7 +117,7 @@ static void BuildTetFaces(const FTissueTet & Tet, TArray<FTetFace>&OutFaces)
         Tet.Vertices.W,
         Tet.Vertices.Z)
     });
-    
+
     // Face opposite V2
     OutFaces.Add({
         2,
@@ -126,7 +126,7 @@ static void BuildTetFaces(const FTissueTet & Tet, TArray<FTetFace>&OutFaces)
         Tet.Vertices.Y,
         Tet.Vertices.W)
     });
-    
+
     // Face opposite V3
     OutFaces.Add({
         3,
@@ -135,6 +135,87 @@ static void BuildTetFaces(const FTissueTet & Tet, TArray<FTetFace>&OutFaces)
         Tet.Vertices.Z,
         Tet.Vertices.Y)
     });
+}
+
+static void BuildBoundaryChains(FTetCutBoundary& OutBoundary)
+{
+    // Build adjacency
+    TArray<TArray<int32>> VertexToEdges;
+    VertexToEdges.SetNum(OutBoundary.Vertices.Num());
+    for (int32 EdgeIndex = 0; EdgeIndex < OutBoundary.Edges.Num(); ++EdgeIndex)
+    {
+        const FTetCutBoundaryEdge& Edge = OutBoundary.Edges[EdgeIndex];
+
+        VertexToEdges[Edge.VertexA].Add(EdgeIndex);
+        VertexToEdges[Edge.VertexB].Add(EdgeIndex);
+    }
+
+    // Main algo
+    TArray<bool> VisitedEdges;
+    VisitedEdges.Init(false, OutBoundary.Edges.Num());
+    for (int32 StartEdgeIndex = 0; StartEdgeIndex < OutBoundary.Edges.Num(); ++StartEdgeIndex)
+    {
+        if (VisitedEdges[StartEdgeIndex])
+        {
+            continue;
+        }
+
+        const FTetCutBoundaryEdge& StartEdge = OutBoundary.Edges[StartEdgeIndex];
+
+        TArray<int32> Chain;
+        int32 StartVertex = StartEdge.VertexA;
+        int32 PreviousEdge = INDEX_NONE;
+        int32 CurrentVertex = StartVertex;
+
+        Chain.Add(CurrentVertex);
+
+        while (true)
+        {
+            int32 NextEdge = INDEX_NONE;
+
+            for (const int32 EdgeIndex : VertexToEdges[CurrentVertex])
+            {
+                if (VisitedEdges[EdgeIndex])
+                {
+                    continue;
+                }
+
+                if (EdgeIndex == PreviousEdge)
+                {
+                    continue;
+                }
+
+                NextEdge = EdgeIndex;
+                break;
+            }
+
+            if (NextEdge == INDEX_NONE)
+            {
+                break;
+            }
+
+            VisitedEdges[NextEdge] = true;
+
+            const FTetCutBoundaryEdge& Edge = OutBoundary.Edges[NextEdge];
+
+            const int32 NextVertex = Edge.VertexA == CurrentVertex ? Edge.VertexB : Edge.VertexA;
+
+            PreviousEdge = NextEdge;
+            CurrentVertex = NextVertex;
+
+            if (CurrentVertex == StartVertex)
+            {
+                break;
+            }
+
+            Chain.Add(CurrentVertex);
+        }
+
+        if (Chain.Num() >= 2)
+        {
+            OutBoundary.Chains.Add(MoveTemp(Chain));
+        }
+    }
 }
 
 bool TetCutBoundary::BuildTetCutBoundary(
@@ -158,7 +239,6 @@ bool TetCutBoundary::BuildTetCutBoundary(
     BuildTetFaces(Tet, Faces);
 
     TMap<uint64, int32> EdgeToIndex;
-
     for (int32 PatchIndex = 0; PatchIndex < TetCutData.Patches.Num(); ++PatchIndex)
     {
         const FTetCutPatch& Patch = TetCutData.Patches[PatchIndex];
@@ -226,81 +306,7 @@ bool TetCutBoundary::BuildTetCutBoundary(
     }
 
     // Build FTetCutBoundary.Chains
-    TArray<TArray<int32>> VertexToEdges;
-    VertexToEdges.SetNum(OutBoundary.Vertices.Num());
-    for (int32 EdgeIndex = 0; EdgeIndex < OutBoundary.Edges.Num(); ++EdgeIndex)
-    {
-        const FTetCutBoundaryEdge& Edge = OutBoundary.Edges[EdgeIndex];
+    BuildBoundaryChains(OutBoundary);
 
-        VertexToEdges[Edge.VertexA].Add(EdgeIndex);
-        VertexToEdges[Edge.VertexB].Add(EdgeIndex);
-    }
-
-    TArray<bool> VisitedEdges;
-    VisitedEdges.Init(false, OutBoundary.Edges.Num());
-    for (int32 StartEdgeIndex = 0; StartEdgeIndex < OutBoundary.Edges.Num(); ++StartEdgeIndex)
-    {
-        if (VisitedEdges[StartEdgeIndex])
-        {
-            continue;
-        }
-
-        const FTetCutBoundaryEdge& StartEdge = OutBoundary.Edges[StartEdgeIndex];
-
-        TArray<int32> Chain;
-        int32 StartVertex = StartEdge.VertexA;
-        int32 PreviousEdge = INDEX_NONE;
-        int32 CurrentVertex = StartVertex;
-
-        Chain.Add(CurrentVertex);
-
-        while (true)
-        {
-            int32 NextEdge = INDEX_NONE;
-
-            for (const int32 EdgeIndex : VertexToEdges[CurrentVertex])
-            {
-                if (VisitedEdges[EdgeIndex])
-                {
-                    continue;
-                }
-
-                if (EdgeIndex == PreviousEdge)
-                {
-                    continue;
-                }
-
-                NextEdge = EdgeIndex;
-                break;
-            }
-
-            if (NextEdge == INDEX_NONE)
-            {
-                break;
-            }
-
-            VisitedEdges[NextEdge] = true;
-
-            const FTetCutBoundaryEdge& Edge = OutBoundary.Edges[NextEdge];
-
-            const int32 NextVertex = Edge.VertexA == CurrentVertex ? Edge.VertexB : Edge.VertexA;
-
-            PreviousEdge = NextEdge;
-            CurrentVertex = NextVertex;
-
-            if (CurrentVertex == StartVertex)
-            {
-                break;
-            }
-
-            Chain.Add(CurrentVertex);
-        }
-
-        if (Chain.Num() >= 2)
-        {
-            OutBoundary.Chains.Add(MoveTemp(Chain));
-        }
-    }
-
-    return false;
+    return OutBoundary.Edges.Num() > 0 && OutBoundary.Chains.Num() > 0;
 }

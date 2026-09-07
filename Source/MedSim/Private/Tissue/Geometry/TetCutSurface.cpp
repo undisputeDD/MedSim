@@ -1,5 +1,4 @@
 #include "Tissue/Geometry/TetCutSurface.h"
-#include "Tissue/Geometry/Utility.h"
 
 constexpr float CutAreaEpsilon = 0.001f;
 

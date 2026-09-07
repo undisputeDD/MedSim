@@ -513,6 +513,13 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
             continue;
         }
 
+        constexpr int32 DebugTetId = 245;
+
+        if (TetCut.TetId != DebugTetId)
+        {
+            continue;
+        }
+
         FTetCutSurface Surface;
 
         if (!TetCutSurface::Build(
@@ -532,6 +539,229 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
             Boundary))
         {
             continue;
+        }
+
+        UE_LOG(
+            LogTemp,
+            Display,
+            TEXT(
+                "TetCutBoundary "
+                "Tet=%d "
+                "Vertices=%d "
+                "Edges=%d "
+                "Chains=%d"
+            ),
+            TetCut.TetId,
+            Boundary.Vertices.Num(),
+            Boundary.Edges.Num(),
+            Boundary.Chains.Num()
+        );
+
+        for (int32 VertexIndex = 0; VertexIndex < Boundary.Vertices.Num(); ++VertexIndex)
+        {
+            const FVector3f& P = Boundary.Vertices[VertexIndex].Position;
+
+            UE_LOG(
+                LogTemp,
+                Display,
+                TEXT(
+                    "  BoundaryVertex[%d] = (%.3f %.3f %.3f)"
+                ),
+                VertexIndex,
+                P.X,
+                P.Y,
+                P.Z
+            );
+        }
+
+        for (int32 EdgeIndex = 0; EdgeIndex < Boundary.Edges.Num(); ++EdgeIndex)
+        {
+            const FTetCutBoundaryEdge& Edge = Boundary.Edges[EdgeIndex];
+
+            UE_LOG(
+                LogTemp,
+                Display,
+                TEXT(
+                    "  BoundaryEdge[%d] "
+                    "V=(%d,%d) "
+                    "Face=%d"
+                ),
+                EdgeIndex,
+                Edge.VertexA,
+                Edge.VertexB,
+                Edge.TetFaceIndex
+            );
+        }
+
+        for (int32 ChainIndex = 0; ChainIndex < Boundary.Chains.Num(); ++ChainIndex)
+        {
+            const TArray<int32>& Chain = Boundary.Chains[ChainIndex];
+
+            FString ChainString;
+
+            for (int32 VertexIndex : Chain)
+            {
+                if (!ChainString.IsEmpty())
+                {
+                    ChainString += TEXT(" -> ");
+                }
+
+                ChainString += FString::FromInt(VertexIndex);
+            }
+
+            UE_LOG(
+                LogTemp,
+                Display,
+                TEXT(
+                    "  Chain[%d]: %s"
+                ),
+                ChainIndex,
+                *ChainString
+            );
+        }
+
+        const FVector3f TetA = TissueSnapshot.Vertices[TissueSnapshot.Tetrahedra[DebugTetId].Vertices.X].CurrentPosition;
+        const FVector3f TetB = TissueSnapshot.Vertices[TissueSnapshot.Tetrahedra[DebugTetId].Vertices.Y].CurrentPosition;
+        const FVector3f TetC = TissueSnapshot.Vertices[TissueSnapshot.Tetrahedra[DebugTetId].Vertices.Z].CurrentPosition;
+        const FVector3f TetD = TissueSnapshot.Vertices[TissueSnapshot.Tetrahedra[DebugTetId].Vertices.W].CurrentPosition;
+
+        DrawDebugLine(
+            GetWorld(),
+            TissueTransform.TransformPosition(FVector(TetA)),
+            TissueTransform.TransformPosition(FVector(TetB)),
+            FColor::Yellow,
+            true,
+            20.f,
+            0,
+            0.08f
+        );
+
+        DrawDebugLine(
+            GetWorld(),
+            TissueTransform.TransformPosition(FVector(TetA)),
+            TissueTransform.TransformPosition(FVector(TetC)),
+            FColor::Yellow,
+            true,
+            20.f,
+            0,
+            0.08f
+        );
+
+        DrawDebugLine(
+            GetWorld(),
+            TissueTransform.TransformPosition(FVector(TetA)),
+            TissueTransform.TransformPosition(FVector(TetD)),
+            FColor::Yellow,
+            true,
+            20.f,
+            0,
+            0.08f
+        );
+
+        DrawDebugLine(
+            GetWorld(),
+            TissueTransform.TransformPosition(FVector(TetB)),
+            TissueTransform.TransformPosition(FVector(TetC)),
+            FColor::Yellow,
+            true,
+            20.f,
+            0,
+            0.08f
+        );
+
+        DrawDebugLine(
+            GetWorld(),
+            TissueTransform.TransformPosition(FVector(TetB)),
+            TissueTransform.TransformPosition(FVector(TetD)),
+            FColor::Yellow,
+            true,
+            20.f,
+            0,
+            0.08f
+        );
+
+        DrawDebugLine(
+            GetWorld(),
+            TissueTransform.TransformPosition(FVector(TetC)),
+            TissueTransform.TransformPosition(FVector(TetD)),
+            FColor::Yellow,
+            true,
+            20.f,
+            0,
+            0.08f
+        );
+
+        for (const FTetCutSurfaceTriangle& Triangle : Surface.Triangles)
+        {
+            const FVector3f TriA = Surface.Vertices[Triangle.Vertices.X].Position;
+            const FVector3f TriB = Surface.Vertices[Triangle.Vertices.Y].Position;
+            const FVector3f TriC = Surface.Vertices[Triangle.Vertices.Z].Position;
+
+            DrawDebugLine(
+                GetWorld(),
+                TissueTransform.TransformPosition(FVector(TriA)),
+                TissueTransform.TransformPosition(FVector(TriB)),
+                FColor::Green,
+                true,
+                20.f,
+                0,
+                0.08f
+            );
+
+            DrawDebugLine(
+                GetWorld(),
+                TissueTransform.TransformPosition(FVector(TriA)),
+                TissueTransform.TransformPosition(FVector(TriC)),
+                FColor::Green,
+                true,
+                20.f,
+                0,
+                0.08f
+            );
+
+            DrawDebugLine(
+                GetWorld(),
+                TissueTransform.TransformPosition(FVector(TriB)),
+                TissueTransform.TransformPosition(FVector(TriC)),
+                FColor::Green,
+                true,
+                20.f,
+                0,
+                0.08f
+            );
+        }
+
+        for (const FTetCutBoundaryEdge& Edge : Boundary.Edges)
+        {
+            const FVector3f& A = Boundary.Vertices[Edge.VertexA].Position;
+
+            const FVector3f& B = Boundary.Vertices[Edge.VertexB].Position;
+
+            DrawDebugLine(
+                GetWorld(),
+                TissueTransform.TransformPosition(FVector(A)),
+                TissueTransform.TransformPosition(FVector(B)),
+                FColor::Red,
+                true,
+                20.f,
+                0,
+                0.08f
+            );
+        }
+
+        for (const FTetCutBoundaryVertex& Vertex : Boundary.Vertices)
+        {
+            DrawDebugSphere(
+                GetWorld(),
+                TissueTransform.TransformPosition(FVector(Vertex.Position)),
+                0.12f,
+                8,
+                FColor::Blue,
+                true,
+                20.f,
+                0,
+                0.04f
+            );
         }
 
         CutSurfaces.Add(MoveTemp(Surface));
