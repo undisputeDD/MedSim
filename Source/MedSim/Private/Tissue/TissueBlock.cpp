@@ -445,7 +445,7 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
 
     for (const FTriangleTetIntersection& Intersection : Intersections)
     {
-        UE_LOG(
+        /*UE_LOG(
             LogTemp,
             Display,
             TEXT(
@@ -454,7 +454,7 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
             Intersection.TetId,
             Intersection.BladeTriangleIndex,
             Intersection.Polygon.Num()
-        );
+        );*/
 
         /*for (int32 i = 0; i < Intersection.Polygon.Num(); ++i)
         {
@@ -483,19 +483,26 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
     TArray<FTetCutData> TetCutData;
     TetCutSurface::BuildTetCutData(Intersections, TetCutData);
 
-    /*for (const FTetCutData& TetCut : TetCutData)
+    for (const FTetCutData& TetCut : TetCutData)
     {
-        UE_LOG(
-            LogTemp,
-            Display,
-            TEXT("TetId = %d PatchesSize = %d BoundaryIntersections = %d Area = %f NeedsCut = %s"),
-            TetCut.TetId,
-            TetCut.Patches.Num(),
-            TetCut.BoundaryIntersections.Num(),
-            TetCut.TotalIntersectionArea,
-            TetCut.bNeedsCut ? TEXT("Yes") : TEXT("No")
-        );
-    }*/
+        if (TetCut.TetId == 245)
+        {
+            UE_LOG(
+                LogTemp,
+                Display,
+                TEXT("TetId = %d PatchesSize = %d Area = %f NeedsCut = %s"),
+                TetCut.TetId,
+                TetCut.Patches.Num(),
+                TetCut.TotalIntersectionArea,
+                TetCut.bNeedsCut ? TEXT("Yes") : TEXT("No")
+            );
+
+            for (const FTetCutPatch& Patch : TetCut.Patches)
+            {
+                UE_LOG(LogTemp, Display, TEXT("Patch normal: (%f %f %f)"), Patch.Normal.X, Patch.Normal.Y, Patch.Normal.Z);
+            }
+        }
+    }
 
     // --------------------------------------------------------
 
@@ -761,6 +768,34 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
                 20.f,
                 0,
                 0.04f
+            );
+        }
+
+        if (!TetCutBoundary::MapToSurface(
+            Surface,
+            Boundary,
+            0.01f))    // vertex match tolerance
+        {
+            continue;
+        }
+
+        for (int32 Index = 0; Index < Boundary.Vertices.Num(); ++Index)
+        {
+            const FTetCutBoundaryVertex& Vertex = Boundary.Vertices[Index];
+
+            UE_LOG(
+                LogTemp,
+                Display,
+                TEXT(
+                    "BoundaryVertex[%d] "
+                    "SurfaceVertexIndex=%d "
+                    "Position=(%.3f %.3f %.3f)"
+                ),
+                Index,
+                Vertex.SurfaceVertexIndex,
+                Vertex.Position.X,
+                Vertex.Position.Y,
+                Vertex.Position.Z
             );
         }
 

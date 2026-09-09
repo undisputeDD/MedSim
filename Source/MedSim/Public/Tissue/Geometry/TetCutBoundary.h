@@ -7,6 +7,9 @@
 struct FTetCutBoundaryVertex
 {
     FVector3f Position;
+
+    // Need to add mapping to surface vertices
+    int32 SurfaceVertexIndex = INDEX_NONE;
 };
 
 struct FTetCutBoundaryEdge
@@ -16,6 +19,9 @@ struct FTetCutBoundaryEdge
 
     // Sometimes can be on 2 faces meaning boundary edge is on tet edge
     int32 TetFaceIndex = INDEX_NONE;
+
+    // Debug
+    int32 SourcePatchIndex = INDEX_NONE;
 };
 
 struct FTetCutBoundary
@@ -33,4 +39,9 @@ namespace TetCutBoundary
         const FTissueTopologySnapshot& TissueSnapshot,
         float VertexMergeTolerance,
         FTetCutBoundary& OutBoundary);
+
+    bool MapToSurface(
+        const FTetCutSurface& Surface,
+        FTetCutBoundary& Boundary,
+        float MatchTolerance);
 }
