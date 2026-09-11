@@ -522,9 +522,7 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
         // 6.4 Debug
         // ----------------------------------------------------
 
-        constexpr int32 DebugTetId = 245;
-
-        if (TetCut.TetId == DebugTetId)
+        if (bDebugSingleTet && TetCut.TetId == DebugTetId)
         {
             const FVector3f TetA = V0;
             const FVector3f TetB = V1;
