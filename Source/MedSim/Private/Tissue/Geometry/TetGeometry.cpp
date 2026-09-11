@@ -32,9 +32,7 @@ bool TetGeometry::ComputeTetBarycentric(
     }
 
     const double W1 = ScalarTripleProduct(P, B, C) / Denominator;
-
     const double W2 = ScalarTripleProduct(A, P, C) / Denominator;
-
     const double W3 = ScalarTripleProduct(A, B, P) / Denominator;
 
     const double W0 = 1.0 - W1 - W2 - W3;

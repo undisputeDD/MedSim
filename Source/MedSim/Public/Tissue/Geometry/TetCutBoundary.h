@@ -1,17 +1,20 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Tissue/Data/TissueTopology.h"
 #include "Tissue/Geometry/TetCutSurface.h"
 
 struct FTetCutBoundaryVertex
 {
     FVector3f Position = FVector3f::ZeroVector;
 
-    // Need to add mapping to surface vertices
+    // Exact index into FTetCutSurface::Vertices.
     int32 SurfaceVertexIndex = INDEX_NONE;
 
-    // Debug
+    // Tet faces containing this boundary vertex.
+    // Empty = vertex is inside the tetrahedron.
+    // 1 face = vertex lies on a tet face.
+    // 2 faces = vertex lies on a tet edge.
+    // 3 faces = vertex is a tet vertex.
     TArray<int32> TetFaceIndices;
 
     // Coordinates inside source tetrahedron.
@@ -23,11 +26,10 @@ struct FTetCutBoundaryEdge
     int32 VertexA = INDEX_NONE;
     int32 VertexB = INDEX_NONE;
 
-    // Sometimes can be on 2 faces meaning boundary edge is on tet edge
+    // Empty = edge is fully internal to the tetrahedron.
+    // One face = edge lies on a tet face.
+    // Two faces = edge lies on a tet edge.
     TArray<int32> TetFaceIndices;
-
-    // Debug/provenance  only
-    int32 SourcePatchIndex = INDEX_NONE;
 };
 
 struct FTetCutBoundary
@@ -40,14 +42,8 @@ struct FTetCutBoundary
 
 namespace TetCutBoundary
 {
-    bool BuildTetCutBoundary(
-        const FTetCutData& TetCutData,
-        const FTissueTopologySnapshot& TissueSnapshot,
-        float VertexMergeTolerance,
-        FTetCutBoundary& OutBoundary);
-
-    bool MapToSurface(
+    bool Build(
         const FTetCutSurface& Surface,
-        FTetCutBoundary& Boundary,
-        float MatchTolerance);
+        float TetFaceTolerance,
+        FTetCutBoundary& OutBoundary);
 }

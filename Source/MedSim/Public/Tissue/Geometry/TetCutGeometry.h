@@ -14,6 +14,6 @@ struct FTetCutGeometry
 
     bool IsValid() const
     {
-        return TetId != INDEX_NONE && Surface.IsValid() && Boundary.Edges.Num() > 0;
+        return TetId != INDEX_NONE && Surface.IsValid() && Boundary.Vertices.Num() > 0;
     }
 };

@@ -58,6 +58,7 @@ struct FTetCutSurface
     TArray<FTetCutSurfaceTriangle> Triangles;
 
     float Area = 0.0f;
+    float RelativeAreaError = 0.0f;
 
     bool IsValid() const
     {
