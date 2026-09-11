@@ -71,7 +71,6 @@ void TetCutSurface::BuildTetCutData(const TArray<FTriangleTetIntersection>& Inte
 			continue;
 		}
 
-		// Maybe need for update - connected patch
 		TetCut.TotalIntersectionArea += Patch.Area;
 
 		TetCut.Patches.Add(MoveTemp(Patch));
@@ -87,6 +86,7 @@ static void TriangulateConvexPolygon(
 	const TArray<int32>& VertexIndices,
 	const TArray<FTetCutSurfaceVertex>& SurfaceVertices,
 	int32 SourcePatchIndex,
+	const FVector3f& PatchNormal,
 	TArray<FTetCutSurfaceTriangle>& OutTriangles)
 {
 	if (VertexIndices.Num() < 3)
@@ -106,18 +106,34 @@ static void TriangulateConvexPolygon(
 
 		const FVector3f& C = SurfaceVertices[IndexC].Position;
 
-		const float TriangleArea = 0.5f * FVector3f::CrossProduct(B - A, C - A).Length();
+		const FVector3f Cross = FVector3f::CrossProduct(B - A, C - A);
+
+		const float TriangleArea = 0.5f * Cross.Length();
 
 		if (TriangleArea <= KINDA_SMALL_NUMBER)
 		{
 			continue;
 		}
 
+		FVector3f TriangleNormal = Cross.GetSafeNormal();
+
+		int32 FinalB = IndexB;
+		int32 FinalC = IndexC;
+
+		if (FVector3f::DotProduct(TriangleNormal, PatchNormal) < 0.0f)
+		{
+			Swap(FinalB, FinalC);
+
+			TriangleNormal = -TriangleNormal;
+		}
+
 		FTetCutSurfaceTriangle& Triangle = OutTriangles.AddDefaulted_GetRef();
 
-		Triangle.Vertices = FIntVector(IndexA, IndexB, IndexC);
+		Triangle.Vertices = FIntVector(IndexA, FinalB, FinalC);
 
 		Triangle.SourcePatchIndex = SourcePatchIndex;
+
+		Triangle.Normal = TriangleNormal;
 	}
 }
 
@@ -186,7 +202,7 @@ bool TetCutSurface::Build(
 			continue;
 		}
 
-		const float PolygonArea = TetCutSurface::ComputePolygonArea(Patch.Polygon);
+		const float PolygonArea = Patch.Area;
 
 		if (PolygonArea <= KINDA_SMALL_NUMBER)
 		{
@@ -210,7 +226,7 @@ bool TetCutSurface::Build(
 			continue;
 		}
 
-		TriangulateConvexPolygon(PolygonVertexIndices, OutSurface.Vertices, PatchIndex, OutSurface.Triangles);
+		TriangulateConvexPolygon(PolygonVertexIndices, OutSurface.Vertices, PatchIndex, Patch.Normal, OutSurface.Triangles);
 	}
 
 	// Compute final area from generated triangles.

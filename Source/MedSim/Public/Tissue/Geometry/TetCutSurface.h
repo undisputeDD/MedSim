@@ -36,6 +36,8 @@ struct FTetCutData
 struct FTetCutSurfaceVertex
 {
     FVector3f Position = FVector3f::ZeroVector;
+
+    FVector4f Barycentric = FVector4f(0.0, 0.0, 0.0, 0.0);
 };
 
 struct FTetCutSurfaceTriangle

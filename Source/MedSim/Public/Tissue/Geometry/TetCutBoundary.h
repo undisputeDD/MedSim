@@ -6,10 +6,16 @@
 
 struct FTetCutBoundaryVertex
 {
-    FVector3f Position;
+    FVector3f Position = FVector3f::ZeroVector;
 
     // Need to add mapping to surface vertices
     int32 SurfaceVertexIndex = INDEX_NONE;
+
+    // Debug
+    TArray<int32> TetFaceIndices;
+
+    // Coordinates inside source tetrahedron.
+    FVector4f Barycentric = FVector4f(0.0, 0.0, 0.0, 0.0);
 };
 
 struct FTetCutBoundaryEdge
@@ -18,9 +24,9 @@ struct FTetCutBoundaryEdge
     int32 VertexB = INDEX_NONE;
 
     // Sometimes can be on 2 faces meaning boundary edge is on tet edge
-    int32 TetFaceIndex = INDEX_NONE;
+    TArray<int32> TetFaceIndices;
 
-    // Debug
+    // Debug/provenance  only
     int32 SourcePatchIndex = INDEX_NONE;
 };
 

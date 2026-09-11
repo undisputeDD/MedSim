@@ -39,4 +39,11 @@ public:
 
 private:
 	FTissueTopologySnapshot TissueSnapshot;
+
+	// For Debug
+	UPROPERTY(EditAnywhere, Category = "MedSim|Cut Debug")
+	bool bDebugSingleTet = false;
+
+	UPROPERTY(EditAnywhere, Category = "MedSim|Cut Debug")
+	int32 DebugTetId = 245;
 };

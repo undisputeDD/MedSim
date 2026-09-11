@@ -1,16 +1,51 @@
 #include "Tissue/Geometry/TetCutBoundary.h"
 
+struct FRawFaceSegment
+{
+    FVector3f A = FVector3f::ZeroVector;
+    FVector3f B = FVector3f::ZeroVector;
+
+    int32 TetFaceIndex = INDEX_NONE;
+
+    int32 SourcePatchIndex = INDEX_NONE;
+};
+
 static int32 FindOrAddBoundaryVertex(
 	const FVector3f& Position,
 	TArray<FTetCutBoundaryVertex>& Vertices,
-	float MergeTolerance)
+	float MergeTolerance,
+    // Debug
+    const FRawFaceSegment& Segment)
 {
 	const float ToleranceSquared = FMath::Square(MergeTolerance);
 
 	for (int32 Index = 0; Index < Vertices.Num(); ++Index)
 	{
-		if (FVector3f::DistSquared(Vertices[Index].Position, Position) <= ToleranceSquared)
+        const float DistSq = FVector3f::DistSquared(Position, Vertices[Index].Position);
+
+		if (DistSq <= ToleranceSquared)
 		{
+            Vertices[Index].TetFaceIndices.AddUnique(Segment.TetFaceIndex);
+
+            UE_LOG(
+                LogTemp,
+                VeryVerbose,
+                TEXT(
+                    "Boundary vertex merge: "
+                    "New=(%.6f %.6f %.6f) "
+                    "Existing=%d=(%.6f %.6f %.6f) "
+                    "Dist=%.6f"
+                ),
+                Position.X,
+                Position.Y,
+                Position.Z,
+                Index,
+                Vertices[Index].Position.X,
+                Vertices[Index].Position.Y,
+                Vertices[Index].Position.Z,
+                FMath::Sqrt(DistSq)
+            );
+
 			return Index;
 		}
 	}
@@ -18,6 +53,9 @@ static int32 FindOrAddBoundaryVertex(
 	FTetCutBoundaryVertex& Vertex = Vertices.AddDefaulted_GetRef();
 
 	Vertex.Position = Position;
+
+    // Debug
+    Vertex.TetFaceIndices.AddUnique(Segment.TetFaceIndex);
 
 	return Vertices.Num() - 1;
 }
@@ -138,7 +176,7 @@ static void BuildTetFaces(const FTissueTet & Tet, TArray<FTetFace>&OutFaces)
 }
 
 static void TraceChain(
-    const FTetCutBoundaryEdge& StartEdge,
+    int32 StartVertex,
     const TArray<TArray<int32>>& VertexToEdges,
     TArray<bool>& VisitedEdges,
     const FTetCutBoundary& OutBoundary,
@@ -146,24 +184,40 @@ static void TraceChain(
 {
     Chain.Reset();
 
-    int32 StartVertex = VertexToEdges[StartEdge.VertexA].Num() == 1 ? StartEdge.VertexA : StartEdge.VertexB;
-    int32 PreviousEdge = INDEX_NONE;
     int32 CurrentVertex = StartVertex;
 
-    Chain.Add(CurrentVertex);
+    TArray<bool> LocalVisitedVertices;
+    LocalVisitedVertices.Init(false, OutBoundary.Vertices.Num());
 
     while (true)
     {
+        if (!OutBoundary.Vertices.IsValidIndex(CurrentVertex))
+        {
+            break;
+        }
+
+        if (LocalVisitedVertices[CurrentVertex])
+        {
+            break;
+        }
+
+        LocalVisitedVertices[CurrentVertex] = true;
+        Chain.Add(CurrentVertex);
+
+        const int32 Degree = VertexToEdges[CurrentVertex].Num();
+
+        // Endpoint or branch.
+        // A valid manifold boundary continues only through degree 2.
+        if (CurrentVertex != StartVertex && Degree != 2)
+        {
+            break;
+        }
+
         int32 NextEdge = INDEX_NONE;
 
         for (const int32 EdgeIndex : VertexToEdges[CurrentVertex])
         {
             if (VisitedEdges[EdgeIndex])
-            {
-                continue;
-            }
-
-            if (EdgeIndex == PreviousEdge)
             {
                 continue;
             }
@@ -183,75 +237,52 @@ static void TraceChain(
 
         const int32 NextVertex = Edge.VertexA == CurrentVertex ? Edge.VertexB : Edge.VertexA;
 
-        PreviousEdge = NextEdge;
         CurrentVertex = NextVertex;
 
+        // Closed loop.
         if (CurrentVertex == StartVertex)
         {
             break;
         }
-
-        Chain.Add(CurrentVertex);
     }
 }
 
-static void BuildBoundaryChains(FTetCutBoundary& OutBoundary)
+static bool BuildBoundaryChains(FTetCutBoundary& OutBoundary)
 {
-    // Build adjacency
+    OutBoundary.Chains.Reset();
+
     TArray<TArray<int32>> VertexToEdges;
     VertexToEdges.SetNum(OutBoundary.Vertices.Num());
     for (int32 EdgeIndex = 0; EdgeIndex < OutBoundary.Edges.Num(); ++EdgeIndex)
     {
         const FTetCutBoundaryEdge& Edge = OutBoundary.Edges[EdgeIndex];
 
+        if (!OutBoundary.Vertices.IsValidIndex(Edge.VertexA) || !OutBoundary.Vertices.IsValidIndex(Edge.VertexB))
+        {
+            UE_LOG(
+                LogTemp,
+                Error,
+                TEXT(
+                    "Invalid boundary edge %d: "
+                    "V=(%d,%d)"
+                ),
+                EdgeIndex,
+                Edge.VertexA,
+                Edge.VertexB
+            );
+
+            return false;
+        }
+
         VertexToEdges[Edge.VertexA].Add(EdgeIndex);
         VertexToEdges[Edge.VertexB].Add(EdgeIndex);
     }
 
-    // Main algo
-    TArray<bool> VisitedEdges;
-    VisitedEdges.Init(false, OutBoundary.Edges.Num());
+    // ------------------------------------------------------------
+    // Validate topology
+    // ------------------------------------------------------------
 
-    for (int32 VertexIndex = 0; VertexIndex < OutBoundary.Vertices.Num(); ++VertexIndex)
-    {
-        // Start from Vertex with 1 edge
-        if (VertexToEdges[VertexIndex].Num() != 1)
-        {
-            continue;
-        }
-
-        int32 EdgeIndex = VertexToEdges[VertexIndex][0];
-        if (VisitedEdges[EdgeIndex])
-        {
-            continue;
-        }
-
-        const FTetCutBoundaryEdge& StartEdge = OutBoundary.Edges[EdgeIndex];
-        TArray<int32> Chain;
-
-        TraceChain(StartEdge, VertexToEdges, VisitedEdges, OutBoundary, Chain);
-
-        if (Chain.Num() >= 2)
-        {
-            OutBoundary.Chains.Add(MoveTemp(Chain));
-        }
-    }
-
-    // If there is a loop somewhere -> check it
-    for (int32 EdgeIndex = 0; EdgeIndex < OutBoundary.Edges.Num(); ++EdgeIndex)
-    {
-        if (VisitedEdges[EdgeIndex])
-        {
-            continue;
-        }
-        const FTetCutBoundaryEdge& StartEdge = OutBoundary.Edges[EdgeIndex];
-        TArray<int32> Chain;
-        TraceChain(StartEdge, VertexToEdges, VisitedEdges, OutBoundary, Chain);
-        if (Chain.Num() >= 2)
-        {
-            OutBoundary.Chains.Add(MoveTemp(Chain));
-        }
-    }
+    bool bHasBranch = false;
 
     for (int32 VertexIndex = 0; VertexIndex < VertexToEdges.Num(); ++VertexIndex)
     {
@@ -262,49 +293,129 @@ static void BuildBoundaryChains(FTetCutBoundary& OutBoundary)
             continue;
         }
 
+        bHasBranch = true;
+
+        const FVector3f& P = OutBoundary.Vertices[VertexIndex].Position;
+
         UE_LOG(
             LogTemp,
             Warning,
             TEXT(
                 "Boundary branch: "
-                "Vertex=%d Degree=%d"
+                "Vertex=%d Degree=%d "
+                "Position=(%.6f %.6f %.6f)"
             ),
             VertexIndex,
-            Degree
+            Degree,
+            P.X,
+            P.Y,
+            P.Z
+        );
+    }
+
+    if (bHasBranch)
+    {
+        UE_LOG(
+            LogTemp,
+            Warning,
+            TEXT(
+                "TetCutBoundary: invalid/non-manifold "
+                "boundary graph. Skip topology split for this tet."
+            )
         );
 
-        for (const int32 EdgeIndex : VertexToEdges[VertexIndex])
-        {
-            const FTetCutBoundaryEdge& Edge = OutBoundary.Edges[EdgeIndex];
+        return false;
+    }
 
+    // ------------------------------------------------------------
+    // Trace open chains
+    // ------------------------------------------------------------
+
+    TArray<bool> VisitedEdges;
+    VisitedEdges.Init(false, OutBoundary.Edges.Num());
+
+    for (int32 VertexIndex = 0; VertexIndex < VertexToEdges.Num(); ++VertexIndex)
+    {
+        if (VertexToEdges[VertexIndex].Num() != 1)
+        {
+            continue;
+        }
+
+        const int32 EdgeIndex = VertexToEdges[VertexIndex][0];
+
+        if (VisitedEdges[EdgeIndex])
+        {
+            continue;
+        }
+
+        TArray<int32> Chain;
+
+        TraceChain(
+            VertexIndex,
+            VertexToEdges,
+            VisitedEdges,
+            OutBoundary,
+            Chain
+        );
+
+        if (Chain.Num() >= 2)
+        {
+            OutBoundary.Chains.Add(MoveTemp(Chain));
+        }
+    }
+
+    // ------------------------------------------------------------
+    // Trace remaining loops
+    // ------------------------------------------------------------
+
+    for (int32 EdgeIndex = 0; EdgeIndex < OutBoundary.Edges.Num(); ++EdgeIndex)
+    {
+        if (VisitedEdges[EdgeIndex])
+        {
+            continue;
+        }
+
+        TArray<int32> Chain;
+
+        TraceChain(
+            OutBoundary.Edges[EdgeIndex].VertexA,
+            VertexToEdges,
+            VisitedEdges,
+            OutBoundary,
+            Chain
+        );
+
+        if (Chain.Num() >= 2)
+        {
+            OutBoundary.Chains.Add(MoveTemp(Chain));
+        }
+    }
+
+    // ------------------------------------------------------------
+    // Verify every edge was consumed
+    // ------------------------------------------------------------
+
+    for (int32 EdgeIndex = 0; EdgeIndex < VisitedEdges.Num(); ++EdgeIndex)
+    {
+        if (!VisitedEdges[EdgeIndex])
+        {
             UE_LOG(
                 LogTemp,
                 Warning,
                 TEXT(
-                    "    Edge=%d Patch=%d "
-                    "V=(%d,%d) "
-                    "Face=%d"
+                    "Boundary edge %d was not included "
+                    "in any chain."
                 ),
-                EdgeIndex,
-                Edge.SourcePatchIndex,
-                Edge.VertexA,
-                Edge.VertexB,
-                Edge.TetFaceIndex
+                EdgeIndex
             );
         }
     }
+
+    return OutBoundary.Chains.Num() > 0;
 }
 
-// Normalize raw segments ->
-struct FRawFaceSegment
-{
-    FVector3f A = FVector3f::ZeroVector;
-    FVector3f B = FVector3f::ZeroVector;
-
-    int32 TetFaceIndex = INDEX_NONE;
-
-    int32 SourcePatchIndex = INDEX_NONE;
-};
+// Normalize overlapping boundary segments ->
+// FRawFaceSegment
 
 static bool IsPointOnSegment(
     const FVector3f& Point,
@@ -514,10 +625,12 @@ static void NormalizeFaceSegments(
             Result.B = FMath::Lerp(A, B, T1);
 
             Result.TetFaceIndex = Segment.TetFaceIndex;
+
+            Result.SourcePatchIndex = Segment.SourcePatchIndex;
         }
     }
 }
-// Normalize raw segments <-
+// Normalize overlapping boundary segments <-
 
 bool TetCutBoundary::BuildTetCutBoundary(
     const FTetCutData& TetCutData,
@@ -533,8 +646,32 @@ bool TetCutBoundary::BuildTetCutBoundary(
     }
 
     // Build raw segments
+    if (!TissueSnapshot.Tetrahedra.IsValidIndex(TetCutData.TetId))
+    {
+        UE_LOG(
+            LogTemp,
+            Error,
+            TEXT(
+                "BuildTetCutBoundary: "
+                "Invalid TetId=%d"
+            ),
+            TetCutData.TetId
+        );
+
+        return false;
+    }
     const FTissueTet& Tet = TissueSnapshot.Tetrahedra[TetCutData.TetId];
     const TArray<FTissueVertex>& TissueVertices = TissueSnapshot.Vertices;
+
+    const FIntVector4& V = Tet.Vertices;
+
+    if (!TissueSnapshot.Vertices.IsValidIndex(V.X) ||
+        !TissueSnapshot.Vertices.IsValidIndex(V.Y) ||
+        !TissueSnapshot.Vertices.IsValidIndex(V.Z) ||
+        !TissueSnapshot.Vertices.IsValidIndex(V.W))
+    {
+        return false;
+    }
 
     TArray<FTetFace> Faces;
     BuildTetFaces(Tet, Faces);
@@ -590,12 +727,22 @@ bool TetCutBoundary::BuildTetCutBoundary(
     TArray<FRawFaceSegment> NormalizedSegments;
     NormalizeFaceSegments(RawSegments, VertexMergeTolerance, NormalizedSegments);
 
+    UE_LOG(
+        LogTemp,
+        Display,
+        TEXT(
+            "Boundary normalization: RawSegments=%d NormalizedSegments=%d"
+        ),
+        RawSegments.Num(),
+        NormalizedSegments.Num()
+    );
+
     // Build FTetCutBoundary.Vertices and FTetCutBoundary.Edges
     TMap<uint64, int32> EdgeToIndex;
     for (const FRawFaceSegment& Segment : NormalizedSegments)
     {
-        const int32 VertexA = FindOrAddBoundaryVertex(Segment.A, OutBoundary.Vertices, VertexMergeTolerance);
-        const int32 VertexB = FindOrAddBoundaryVertex(Segment.B, OutBoundary.Vertices, VertexMergeTolerance);
+        const int32 VertexA = FindOrAddBoundaryVertex(Segment.A, OutBoundary.Vertices, VertexMergeTolerance, Segment);
+        const int32 VertexB = FindOrAddBoundaryVertex(Segment.B, OutBoundary.Vertices, VertexMergeTolerance, Segment);
         if (VertexA == VertexB)
         {
             continue;
@@ -604,6 +751,26 @@ bool TetCutBoundary::BuildTetCutBoundary(
         const uint64 EdgeKey = MakeEdgeKey(VertexA, VertexB);
         if (EdgeToIndex.Contains(EdgeKey))
         {
+            const int32 ExistingEdgeIndex = EdgeToIndex[EdgeKey];
+
+            OutBoundary.Edges[ExistingEdgeIndex].TetFaceIndices.AddUnique(Segment.TetFaceIndex);
+
+            const TArray<int32>& ExistingFaces = OutBoundary.Edges[ExistingEdgeIndex].TetFaceIndices;
+
+            UE_LOG(
+                LogTemp,
+                VeryVerbose,
+                TEXT(
+                    "Duplicate boundary edge: "
+                    "V=(%d,%d), "
+                    "OldFacesNum=%d NewFace=%d"
+                ),
+                VertexA,
+                VertexB,
+                ExistingFaces.Num(),
+                Segment.TetFaceIndex
+            );
+
             continue;
         }
 
@@ -611,7 +778,7 @@ bool TetCutBoundary::BuildTetCutBoundary(
 
         Edge.VertexA = VertexA;
         Edge.VertexB = VertexB;
-        Edge.TetFaceIndex = Segment.TetFaceIndex;
+        Edge.TetFaceIndices.AddUnique(Segment.TetFaceIndex);
 
         Edge.SourcePatchIndex = Segment.SourcePatchIndex;
 
@@ -619,7 +786,11 @@ bool TetCutBoundary::BuildTetCutBoundary(
     }
 
     // Build FTetCutBoundary.Chains
-    BuildBoundaryChains(OutBoundary);
+    const bool bChainsValid = BuildBoundaryChains(OutBoundary);
+    if (!bChainsValid)
+    {
+        return false;
+    }
 
     return OutBoundary.Edges.Num() > 0 && OutBoundary.Chains.Num() > 0;
 }
