@@ -666,20 +666,7 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
                     true,
                     20.0f,
                     0,
-                    0.04f
-                );
-
-                DrawDebugString(
-                    GetWorld(),
-                    WorldPosition + FVector(0, 0, 0.15f),
-                    FString::Printf(
-                        TEXT("B%d / S%d"),
-                        BoundaryVertexIndex,
-                        Vertex.SurfaceVertexIndex
-                    ),
-                    nullptr,
-                    FColor::White,
-                    20.0f
+                    0.02f
                 );
             }
 
