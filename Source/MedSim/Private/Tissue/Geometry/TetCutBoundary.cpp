@@ -1,4 +1,5 @@
 #include "Tissue/Geometry/TetCutBoundary.h"
+#include "Tissue/Geometry/TetGeometry.h"
 
 namespace
 {
@@ -9,14 +10,6 @@ namespace
 
         int32 TriangleCount = 0;
     };
-
-    static uint64 MakeEdgeKey(int32 VertexA, int32 VertexB)
-    {
-        const uint32 A = static_cast<uint32>(FMath::Min(VertexA, VertexB));
-        const uint32 B = static_cast<uint32>(FMath::Max(VertexA, VertexB));
-
-        return (static_cast<uint64>(A) << 32) | static_cast<uint64>(B);
-    }
 
     static bool ValidateSurfaceTriangles(const FTetCutSurface& Surface)
     {
@@ -76,9 +69,9 @@ namespace
             const int32 B = SurfaceTriangle.Vertices.Y;
             const int32 C = SurfaceTriangle.Vertices.Z;
 
-            const uint64 ABKey = MakeEdgeKey(A, B);
-            const uint64 BCKey = MakeEdgeKey(B, C);
-            const uint64 CAKey = MakeEdgeKey(C, A);
+            const uint64 ABKey = TetGeometry::MakeEdgeKey(A, B);
+            const uint64 BCKey = TetGeometry::MakeEdgeKey(B, C);
+            const uint64 CAKey = TetGeometry::MakeEdgeKey(C, A);
 
             FSurfaceEdgeInfo& AB = OutEdges.FindOrAdd(ABKey);
             AB.VertexA = FMath::Min(A, B);

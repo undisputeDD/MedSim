@@ -22,7 +22,7 @@ void TetCutGeometry::Build(
         Geometry.TetId = TetCut.TetId;
 
         // ----------------------------------------------------
-        // 6.1 Build cut surface
+        // 6.1 Build cut surface and validate it
         // ----------------------------------------------------
 
         constexpr float SurfaceVertexMergeTolerance = 0.01f;
@@ -64,6 +64,16 @@ void TetCutGeometry::Build(
 
         if (bDebugSingleTet && TetCut.TetId == DebugTetId)
         {
+            UE_LOG(
+                LogTemp,
+                Display,
+                TEXT(
+                    "TetCutSurface topology valid: "
+                    "Tet=%d"
+                ),
+                Geometry.Surface.TetId
+            );
+
             const FVector3f TetA = V0;
             const FVector3f TetB = V1;
             const FVector3f TetC = V2;

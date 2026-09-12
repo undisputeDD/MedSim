@@ -50,4 +50,6 @@ namespace TetCutSurface
         const FTetCutData& TetCutData,
         float VertexMergeTolerance,
         FTetCutSurface& OutSurface);
+
+    bool ValidateTopology(const FTetCutSurface& Surface);
 }

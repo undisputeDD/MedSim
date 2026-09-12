@@ -25,4 +25,6 @@ namespace TetGeometry
         const FTissueTopologySnapshot& TissueSnapshot,
         const FTetCutData& TetCut,
         FTetCutGeometry& Geometry);
+
+    uint64 MakeEdgeKey(int32 VertexA, int32 VertexB);
 }

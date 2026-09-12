@@ -138,3 +138,11 @@ bool TetGeometry::AssignSurfaceBarycentrics(
 
     return true;
 }
+
+uint64 TetGeometry::MakeEdgeKey(int32 VertexA, int32 VertexB)
+{
+    const uint32 A = static_cast<uint32>(FMath::Min(VertexA, VertexB));
+    const uint32 B = static_cast<uint32>(FMath::Max(VertexA, VertexB));
+
+    return (static_cast<uint64>(A) << 32) | static_cast<uint64>(B);
+}

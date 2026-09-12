@@ -394,8 +394,8 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
     // 5. Build FTetCutData
     // --------------------------------------------------------
 
-    TArray<FTetCutData> TetCutData;
-    TetCutData::Build(Intersections, TetCutData);
+    TArray<FTetCutData> CutData;
+    TetCutData::Build(Intersections, CutData);
 
     // --------------------------------------------------------
 
@@ -404,7 +404,7 @@ void ATissueBlock::ApplyCut(const TArray<FVector>& PreviousBladePoints, const TA
     // --------------------------------------------------------
 
     TArray<FTetCutGeometry> CutGeometry;
-    TetCutGeometry::Build(TetCutData, TissueSnapshot, CutGeometry, TissueTransform, bDebugSingleTet, DebugTetId, GetWorld());
+    TetCutGeometry::Build(CutData, TissueSnapshot, CutGeometry, TissueTransform, bDebugSingleTet, DebugTetId, GetWorld());
 
     // --------------------------------------------------------
 }

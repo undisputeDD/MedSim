@@ -1,4 +1,5 @@
 #include "Tissue/Geometry/TetCutSurface.h"
+#include "Tissue/Geometry/TetGeometry.h"
 
 static void TriangulateConvexPolygon(
 	const TArray<int32>& VertexIndices,
@@ -182,5 +183,153 @@ bool TetCutSurface::Build(
 		RelativeAreaError * 100.f
 	);
 
-	return OutSurface.IsValid();
+	if (!OutSurface.IsValid())
+	{
+		return false;
+	}
+
+	if (!TetCutSurface::ValidateTopology(OutSurface))
+	{
+		return false;
+	}
+
+	return true;
+}
+
+namespace
+{
+	struct FSurfaceEdgeOccurrence
+	{
+		int32 TriangleIndex = INDEX_NONE;
+
+		int32 FromVertex = INDEX_NONE;
+		int32 ToVertex = INDEX_NONE;
+	};
+
+	struct FSurfaceEdgeInfo
+	{
+		TArray<FSurfaceEdgeOccurrence> Occurrences;
+	};
+}
+
+static void BuildOrientedSurfaceEdgeMap(const FTetCutSurface& Surface, TMap<uint64, FSurfaceEdgeInfo>& OutEdges)
+{
+	OutEdges.Reset();
+
+	for (int32 TriangleIndex = 0; TriangleIndex < Surface.Triangles.Num(); ++TriangleIndex)
+	{
+		const FIntVector& Triangle = Surface.Triangles[TriangleIndex].Vertices;
+
+		const int32 A = Triangle.X;
+		const int32 B = Triangle.Y;
+		const int32 C = Triangle.Z;
+
+		const auto AddEdge = 
+			[&OutEdges, TriangleIndex](int32 From, int32 To)
+			{
+				const uint64 Key = TetGeometry::MakeEdgeKey(From, To);
+
+				FSurfaceEdgeInfo& EdgeInfo = OutEdges.FindOrAdd(Key);
+
+				FSurfaceEdgeOccurrence& Occurrence = EdgeInfo.Occurrences.AddDefaulted_GetRef();
+
+				Occurrence.TriangleIndex = TriangleIndex;
+				Occurrence.FromVertex = From;
+				Occurrence.ToVertex = To;
+			};
+
+		AddEdge(A, B);
+		AddEdge(B, C);
+		AddEdge(C, A);
+	}
+}
+
+bool TetCutSurface::ValidateTopology(const FTetCutSurface& Surface)
+{
+	if (!Surface.IsValid())
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT(
+				"TetCutSurface::ValidateTopology: "
+				"invalid surface"
+			)
+		);
+
+		return false;
+	}
+
+	TMap<uint64, FSurfaceEdgeInfo> EdgeMap;
+	BuildOrientedSurfaceEdgeMap(Surface, EdgeMap);
+
+	for (const TPair<uint64, FSurfaceEdgeInfo>& Pair : EdgeMap)
+	{
+		const FSurfaceEdgeInfo& EdgeInfo = Pair.Value;
+		const int32 OccurrenceCount = EdgeInfo.Occurrences.Num();
+
+		// -----------------------------------------------
+		// Boundary edge
+		// -----------------------------------------------
+
+		if (OccurrenceCount == 1)
+		{
+			continue;
+		}
+
+		// -----------------------------------------------
+		// Internal edge
+		// -----------------------------------------------
+
+		if (OccurrenceCount == 2)
+		{
+			const FSurfaceEdgeOccurrence& A = EdgeInfo.Occurrences[0];
+			const FSurfaceEdgeOccurrence& B = EdgeInfo.Occurrences[1];
+
+			const bool bOppositeOrientation = A.FromVertex == B.ToVertex && A.ToVertex == B.FromVertex;
+
+			if (!bOppositeOrientation)
+			{
+				UE_LOG(
+					LogTemp,
+					Error,
+					TEXT(
+						"TetCutSurface::ValidateTopology: "
+						"inconsistent edge orientation. "
+						"Triangles=%d,%d "
+						"Edges=(%d->%d) and (%d->%d)"
+					),
+					A.TriangleIndex,
+					B.TriangleIndex,
+					A.FromVertex,
+					A.ToVertex,
+					B.FromVertex,
+					B.ToVertex
+				);
+
+				return false;
+			}
+
+			continue;
+		}
+
+		// -----------------------------------------------
+		// Non-manifold edge
+		// -----------------------------------------------
+
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT(
+				"TetCutSurface::ValidateTopology: "
+				"non-manifold edge. "
+				"TriangleCount=%d"
+			),
+			OccurrenceCount
+		);
+
+		return false;
+	}
+
+	return true;
 }
