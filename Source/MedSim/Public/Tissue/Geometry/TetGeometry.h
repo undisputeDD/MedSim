@@ -1,6 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Tissue/Data/TissueTopology.h"
+#include "Tissue/Geometry/TetCutGeometry.h"
 
 namespace TetGeometry
 {
@@ -18,4 +20,9 @@ namespace TetGeometry
         const FVector3f& V1,
         const FVector3f& V2,
         const FVector3f& V3);
+
+    bool AssignSurfaceBarycentrics(
+        const FTissueTopologySnapshot& TissueSnapshot,
+        const FTetCutData& TetCut,
+        FTetCutGeometry& Geometry);
 }

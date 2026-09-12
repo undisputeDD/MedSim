@@ -13,7 +13,6 @@ namespace
     static uint64 MakeEdgeKey(int32 VertexA, int32 VertexB)
     {
         const uint32 A = static_cast<uint32>(FMath::Min(VertexA, VertexB));
-
         const uint32 B = static_cast<uint32>(FMath::Max(VertexA, VertexB));
 
         return (static_cast<uint64>(A) << 32) | static_cast<uint64>(B);
@@ -226,9 +225,7 @@ namespace
         return true;
     }
 
-    static void ClassifyBoundaryVerticesOnTetFaces(
-        float Tolerance,
-        FTetCutBoundary& OutBoundary)
+    static void ClassifyBoundaryVerticesOnTetFaces(float Tolerance, FTetCutBoundary& OutBoundary)
     {
         for (FTetCutBoundaryVertex& Vertex : OutBoundary.Vertices)
         {
@@ -252,9 +249,7 @@ namespace
         }
     }
 
-    static void ClassifyBoundaryEdgesOnTetFaces(
-        float Tolerance,
-        FTetCutBoundary& OutBoundary)
+    static void ClassifyBoundaryEdgesOnTetFaces(float Tolerance, FTetCutBoundary& OutBoundary)
     {
         for (FTetCutBoundaryEdge& Edge : OutBoundary.Edges)
         {
@@ -282,7 +277,6 @@ namespace
             for (int32 FaceIndex = 0; FaceIndex < 4; ++FaceIndex)
             {
                 const bool bAOnFace = FMath::Abs(BarycentricA[FaceIndex]) <= Tolerance;
-
                 const bool bBOnFace = FMath::Abs(BarycentricB[FaceIndex]) <= Tolerance;
 
                 if (bAOnFace && bBOnFace)

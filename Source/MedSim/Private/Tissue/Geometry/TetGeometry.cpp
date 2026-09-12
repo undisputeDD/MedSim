@@ -69,3 +69,72 @@ double TetGeometry::ComputeTetSignedVolume6(
 
     return ScalarTripleProduct(A, B, C);
 }
+
+bool TetGeometry::AssignSurfaceBarycentrics(
+    const FTissueTopologySnapshot& TissueSnapshot,
+    const FTetCutData& TetCut,
+    FTetCutGeometry& Geometry)
+{
+    if (!TissueSnapshot.Tetrahedra.IsValidIndex(TetCut.TetId))
+    {
+        UE_LOG(LogTemp, Error, TEXT("ApplyCut: invalid TetId=%d"), TetCut.TetId);
+        return false;
+    }
+
+    const FTissueTet& Tet = TissueSnapshot.Tetrahedra[TetCut.TetId];
+
+    if (!TissueSnapshot.Vertices.IsValidIndex(Tet.Vertices.X) ||
+        !TissueSnapshot.Vertices.IsValidIndex(Tet.Vertices.Y) ||
+        !TissueSnapshot.Vertices.IsValidIndex(Tet.Vertices.Z) ||
+        !TissueSnapshot.Vertices.IsValidIndex(Tet.Vertices.W))
+    {
+        UE_LOG(
+            LogTemp,
+            Error,
+            TEXT(
+                "ApplyCut: invalid tetrahedron "
+                "vertex indices. Tet=%d"
+            ),
+            TetCut.TetId
+        );
+
+        return false;
+    }
+
+    const FVector3f V0 = TissueSnapshot.Vertices[Tet.Vertices.X].CurrentPosition;
+    const FVector3f V1 = TissueSnapshot.Vertices[Tet.Vertices.Y].CurrentPosition;
+    const FVector3f V2 = TissueSnapshot.Vertices[Tet.Vertices.Z].CurrentPosition;
+    const FVector3f V3 = TissueSnapshot.Vertices[Tet.Vertices.W].CurrentPosition;
+
+    constexpr float BarycentricTolerance = 0.01f;
+    for (FTetCutSurfaceVertex& Vertex : Geometry.Surface.Vertices)
+    {
+        if (!ComputeTetBarycentric(
+            Vertex.Position,
+            V0,
+            V1,
+            V2,
+            V3,
+            Vertex.Barycentric,
+            BarycentricTolerance))
+        {
+            UE_LOG(
+                LogTemp,
+                Warning,
+                TEXT(
+                    "ApplyCut: failed to compute "
+                    "barycentric coordinates. "
+                    "Tet=%d Position=(%.6f %.6f %.6f)"
+                ),
+                TetCut.TetId,
+                Vertex.Position.X,
+                Vertex.Position.Y,
+                Vertex.Position.Z
+            );
+
+            return false;
+        }
+    }
+
+    return true;
+}
